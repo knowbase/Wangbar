@@ -1,0 +1,13 @@
+## Interface: 120000
+## Title: Wangbar
+## Notes: Primary and secondary resource bars
+## Author: Awang
+## Version: 1.0.0
+## SavedVariables: AwangsRogueResourceBarDB
+## OptionalDeps: LibSharedMedia-3.0, LibDataBroker-1.1, LibDBIcon-1.0
+
+Config.lua
+Utils.lua
+Options.lua
+EditPanel.lua
+Core.lua
