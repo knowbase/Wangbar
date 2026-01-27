@@ -1,0 +1,6 @@
+package-as: Wangbar
+
+ignore:
+  - .github/**
+  - README.md
+  - CONTRIBUTING.md
