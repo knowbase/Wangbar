@@ -27,3 +27,12 @@ function addon.IsWindwalker()
   local _, _, _, _, _, _, specId = GetSpecializationInfo(spec)
   return specId == 269
 end
+
+-- Check if the player is a Feral Druid.
+function addon.IsFeral()
+  if select(2, UnitClass("player")) ~= "DRUID" then return false end
+  local spec = GetSpecialization()
+  if not spec then return false end
+  local _, _, _, _, _, _, specId = GetSpecializationInfo(spec)
+  return specId == 103
+end
