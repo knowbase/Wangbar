@@ -31,14 +31,14 @@ local CreateEditModePanel
 local UpdateEditPanelFields
 local ApplyFrameSizeAndPosition
 
--- Print a prefixed message to chat.
-local function Print(...)
-  print(ADDON_PREFIX .. ":", ...)
+-- Silence chat output.
+local function Print()
 end
 
 local minimapIcon
 local minimapButton
 local minimapInitialized = false
+local editButton
 
 -- Open the addon options panel.
 local function OpenOptionsPanel()
@@ -168,19 +168,6 @@ ToggleDebugPanel = function()
       EditModeManagerFrame:Show()
     end
     CreateEditModePanel()
-    local panel = addon.editPanel
-    if panel then
-      panel:Show()
-      panel:SetAlpha(1)
-      UpdateEditPanelFields()
-      panel.EnsureTextureList(panel)
-      panel.textureTarget = "combo"
-      panel.SelectTextureByName(panel, SnapComboPointsDB.textureName)
-      if panel.UpdateTextureLabel then
-        panel.UpdateTextureLabel(panel)
-      end
-      ApplyFrameSizeAndPosition()
-    end
     f:Show()
     f:SetAlpha(1)
     energyBorder:Show()
@@ -196,6 +183,50 @@ ToggleDebugPanel = function()
     if addon.editPanel then addon.editPanel:Hide() end
     Print("Panel hidden (debug).")
   end
+end
+
+local function ShowEditPanel()
+  CreateEditModePanel()
+  local panel = addon.editPanel
+  if panel then
+    panel:Show()
+    panel:SetAlpha(1)
+    if not panel.frame or not panel.frame:IsUserPlaced() then
+      panel:ClearAllPoints()
+      panel:SetPoint("CENTER", UIParent, "CENTER", 0, 120)
+      if panel.frame then
+        panel.frame:SetUserPlaced(true)
+      end
+    end
+    UpdateEditPanelFields()
+    if panel.DoLayout then
+      panel:DoLayout()
+    end
+    if panel.scroll and panel.scroll.DoLayout then
+      panel.scroll:DoLayout()
+    end
+    if C_Timer and C_Timer.After then
+      C_Timer.After(0, UpdateEditPanelFields)
+    end
+    panel.EnsureTextureList(panel)
+    panel.textureTarget = "combo"
+    panel.SelectTextureByName(panel, SnapComboPointsDB.textureName)
+    if panel.UpdateTextureLabel then
+      panel.UpdateTextureLabel(panel)
+    end
+  end
+end
+
+local function EnsureEditButton()
+  if editButton then return end
+  editButton = CreateFrame("Button", "WangbarEditButton", f, "UIPanelButtonTemplate")
+  editButton:SetSize(44, 18)
+  editButton:SetText("Edit")
+  editButton:SetPoint("LEFT", f, "RIGHT", 6, 0)
+  editButton:SetScript("OnClick", function()
+    ShowEditPanel()
+  end)
+  editButton:Hide()
 end
 
 local fallbackStatusbars = {
@@ -240,6 +271,7 @@ end
 local CopyDefaults = addon.CopyDefaults
 local IsRogue = addon.IsRogue
 local IsWindwalker = addon.IsWindwalker
+local IsFeral = addon.IsFeral
 
 -- Check if the player uses Chi power.
 local function UsesChi()
@@ -268,7 +300,7 @@ end
 local function ShouldShow()
   if editModeActive then return true end
   if not SnapComboPointsDB.showOnlyWhenRelevant then return true end
-  return IsRogue() or UsesChi() or (IsWindwalker and IsWindwalker())
+  return IsRogue() or UsesChi() or (IsWindwalker and IsWindwalker()) or (IsFeral and IsFeral())
 end
 
 UpdateEditPanelFields = function()
@@ -533,10 +565,7 @@ ApplyFrameSizeAndPosition = function()
     energyBar:SetAllPoints(energyBorder)
   end
 
-  if addon.editPanel then
-    addon.editPanel:ClearAllPoints()
-    addon.editPanel:SetPoint("TOPLEFT", f, "TOPRIGHT", 10, 0)
-  end
+  -- Leave edit panel position alone (AceGUI handles its own placement)
 end
 
 -- Create the edit mode panel if needed.
@@ -684,7 +713,7 @@ local function SetUnlocked(state, suppressPrint)
 
   if state then
     f:SetScript("OnMouseUp", function(self, button)
-      if button == "LeftButton" then
+      if button == "RightButton" and not editModeActive then
         ToggleDebugPanel()
       end
     end)
@@ -748,13 +777,17 @@ local function SyncEditMode()
         panel.UpdateTextureLabel(panel)
       end
       ApplyFrameSizeAndPosition()
-      panel:Show()
       f:Show()
     end
+    EnsureEditButton()
+    editButton:Show()
   else
     debugPanelVisible = false
     if addon.editPanel then
       addon.editPanel:Hide()
+    end
+    if editButton then
+      editButton:Hide()
     end
   end
   UpdateComboDisplay()
@@ -772,6 +805,7 @@ end
 
 SLASH_AWANGSROGUERESOURCEBAR1 = "/arrb"
 SLASH_AWANGSROGUERESOURCEBAR2 = "/cp"
+SLASH_AWANGSROGUERESOURCEBAR3 = "/wb"
 SLASH_AWANGSROGUERESOURCEBARPANEL1 = "/arrbpanel"
 SLASH_AWANGSROGUERESOURCEBARPANEL2 = "/cppanel"
 
@@ -779,6 +813,11 @@ SLASH_AWANGSROGUERESOURCEBARPANEL2 = "/cppanel"
 local function HandleSlash(msg)
   msg = (msg or ""):lower()
   local cmd, a, b = msg:match("^(%S+)%s*(%S*)%s*(%S*)$")
+
+  if cmd == "" then
+    OpenOptionsPanel()
+    return
+  end
 
   if cmd == "unlock" then
     SetUnlocked(true)
@@ -839,28 +878,17 @@ local function HandleSlash(msg)
     Print("showOnlyWhenRelevant =", SnapComboPointsDB.showOnlyWhenRelevant)
   elseif cmd == "panel" then
     ToggleDebugPanel()
-  else
-    Print("commands:")
-    Print("  /arrb unlock  - move bar")
-    Print("  /arrb lock    - lock bar")
-    Print("  /arrb width N - set width")
-    Print("  /arrb height N- set height")
-    Print("  /arrb energyheight N - set energy bar height")
-    Print("  /arrb energygap N    - gap between combo and energy bars")
-    Print("  /arrb texture path   - combo bar texture")
-    Print("  /arrb energytexture path - energy bar texture")
-    Print("  /arrb x N - set x offset")
-    Print("  /arrb y N - set y offset")
-    Print("  /arrb pos X Y - set both offsets")
-    Print("  /arrb panel - toggle edit panel")
-    Print("  /arrb toggle  - show even when not rogue/chi")
-    Print("Legacy alias: /cp")
   end
 end
 
 SlashCmdList.AWANGSROGUERESOURCEBAR = HandleSlash
 
 SlashCmdList.AWANGSROGUERESOURCEBARPANEL = ToggleDebugPanel
+
+SLASH_WANGBAR1 = "/wb"
+SlashCmdList.WANGBAR = function()
+  OpenOptionsPanel()
+end
 
 -- ---------- Events ----------
 f:SetScript("OnEvent", function(self, event, ...)

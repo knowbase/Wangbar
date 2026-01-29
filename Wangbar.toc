@@ -4,7 +4,7 @@
 ## Author: Awang
 ## Version: 1.0.0
 ## SavedVariables: AwangsRogueResourceBarDB
-## OptionalDeps: LibSharedMedia-3.0, LibDataBroker-1.1, LibDBIcon-1.0
+## OptionalDeps: Ace3, LibSharedMedia-3.0, LibDataBroker-1.1, LibDBIcon-1.0
 
 Config.lua
 Utils.lua
