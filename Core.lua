@@ -6,16 +6,12 @@ addon.ADDON_TITLE = ADDON_TITLE
 local f = CreateFrame("Frame", "SnapComboPointsFrame", UIParent, "BackdropTemplate")
 local energyBorder = CreateFrame("Frame", "SnapEnergyBorder", UIParent, "BackdropTemplate")
 local energyBar = CreateFrame("StatusBar", "SnapEnergyBar", energyBorder)
-local healthBorder = CreateFrame("Frame", "SnapHealthBorder", UIParent, "BackdropTemplate")
-local healthBar = CreateFrame("StatusBar", "SnapHealthBar", healthBorder)
 local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
 
 addon.frames = {
   comboFrame = f,
   energyBorder = energyBorder,
   energyBar = energyBar,
-  healthBorder = healthBorder,
-  healthBar = healthBar,
 }
 
 local defaults = addon.defaults
@@ -34,16 +30,9 @@ local ToggleDebugPanel
 local CreateEditModePanel
 local UpdateEditPanelFields
 local ApplyFrameSizeAndPosition
-local SetAnchorFrame
 
 -- Silence chat output.
 local function Print()
-end
-
-local function DebugMessage(msg)
-  if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
-    DEFAULT_CHAT_FRAME:AddMessage(ADDON_PREFIX .. " " .. msg)
-  end
 end
 
 local minimapIcon
@@ -181,9 +170,11 @@ ToggleDebugPanel = function()
     CreateEditModePanel()
     f:Show()
     f:SetAlpha(1)
-    energyBorder:Show()
-    energyBorder:SetAlpha(1)
-    energyBar:Show()
+    if SnapComboPointsDB.energyEnabled ~= false then
+      energyBorder:Show()
+      energyBorder:SetAlpha(1)
+      energyBar:Show()
+    end
     Print("Panel shown (debug).")
   else
     if C_EditMode and C_EditMode.ExitEditMode then
@@ -278,7 +269,6 @@ local function CopyList(src)
   return dst
 end
 
-
 -- ---------- Utils ----------
 local CopyDefaults = addon.CopyDefaults
 local IsRogue = addon.IsRogue
@@ -306,21 +296,6 @@ local function GetMaxComboPoints()
     maxPower = 7
   end
   return maxPower
-end
-
-
-local function DebugSpecThreshold()
-  local spec = GetSpecialization and GetSpecialization() or nil
-  local specId = addon.GetActiveSpecId and addon.GetActiveSpecId() or nil
-  local specName = nil
-  if spec then
-    local _, name = GetSpecializationInfo(spec)
-    specName = name
-  end
-  local thresholds = SnapComboPointsDB.highComboPointsThresholds or {}
-  local stored = specId and (thresholds[specId] or thresholds[tostring(specId)]) or nil
-  local active = addon.GetHighComboThreshold and addon.GetHighComboThreshold() or (SnapComboPointsDB.highComboPointsThreshold or 0)
-  DebugMessage(string.format("Spec=%s (id=%s) stored=%s active=%s global=%s", tostring(specName), tostring(specId), tostring(stored), tostring(active), tostring(SnapComboPointsDB.highComboPointsThreshold)))
 end
 
 -- Determine whether the bars should be visible.
@@ -451,9 +426,15 @@ ApplyFrameStyle = function()
   f.countText:SetShadowOffset(SnapComboPointsDB.countShadowOffset, -SnapComboPointsDB.countShadowOffset)
 
   for i = 1, #bars do
-    local pip = bars[i] and bars[i].pip
-    if pip then
-      pip:SetBackdropColor(unpack(SnapComboPointsDB.pipBgColor))
+    if bars[i] and bars[i].pip then
+      bars[i].pip:SetBackdropColor(unpack(SnapComboPointsDB.pipBgColor))
+      bars[i].pip:SetBackdropBorderColor(unpack(SnapComboPointsDB.pipBorderColor))
+      if bars[i].shadow then
+        bars[i].shadow:SetColorTexture(unpack(SnapComboPointsDB.pipShadowColor))
+        bars[i].shadow:ClearAllPoints()
+        bars[i].shadow:SetPoint("TOPLEFT", bars[i].pip, "TOPLEFT", -SnapComboPointsDB.pipShadowOffset, SnapComboPointsDB.pipShadowOffset)
+        bars[i].shadow:SetPoint("BOTTOMRIGHT", bars[i].pip, "BOTTOMRIGHT", SnapComboPointsDB.pipShadowOffset, -SnapComboPointsDB.pipShadowOffset)
+      end
     end
   end
 
@@ -462,8 +443,7 @@ ApplyFrameStyle = function()
     edgeFile = "Interface\\Buttons\\WHITE8x8",
     edgeSize = SnapComboPointsDB.energyBorderSize or 1,
   })
-  local energyBg = SnapComboPointsDB.energyBg or SnapComboPointsDB.pipBgColor
-  energyBorder:SetBackdropColor(unpack(energyBg))
+  energyBorder:SetBackdropColor(unpack(SnapComboPointsDB.energyBg or SnapComboPointsDB.pipBgColor))
   energyBorder:SetBackdropBorderColor(unpack(SnapComboPointsDB.energyBorder))
   energyBar:SetStatusBarTexture(SnapComboPointsDB.energyTexture)
   energyBar:SetFrameLevel(energyBorder:GetFrameLevel() + 1)
@@ -484,35 +464,6 @@ ApplyFrameStyle = function()
   energyBar.countText:SetTextColor(ecr, ecg, ecb, eca or 1)
   energyBar.countText:SetShadowColor(unpack(SnapComboPointsDB.energyCountShadowColor))
   energyBar.countText:SetShadowOffset(SnapComboPointsDB.energyCountShadowOffset, -SnapComboPointsDB.energyCountShadowOffset)
-
-  healthBorder:SetBackdrop({
-    bgFile = "Interface\\Buttons\\WHITE8x8",
-    edgeFile = "Interface\\Buttons\\WHITE8x8",
-    edgeSize = SnapComboPointsDB.healthBorderSize or SnapComboPointsDB.energyBorderSize or 1,
-  })
-  local healthBg = SnapComboPointsDB.healthBg or energyBg or SnapComboPointsDB.pipBgColor
-  local healthBorderColor = SnapComboPointsDB.healthBorder or SnapComboPointsDB.energyBorder
-  healthBorder:SetBackdropColor(unpack(healthBg))
-  healthBorder:SetBackdropBorderColor(unpack(healthBorderColor))
-  healthBar:SetStatusBarTexture(SnapComboPointsDB.energyTexture)
-  healthBar:SetFrameLevel(healthBorder:GetFrameLevel() + 1)
-
-  if not healthBar.countText then
-    if not healthBar.countTextFrame then
-      healthBar.countTextFrame = CreateFrame("Frame", nil, healthBar)
-    end
-    healthBar.countTextFrame:SetAllPoints(healthBar)
-    healthBar.countTextFrame:SetFrameLevel(healthBar:GetFrameLevel() + 10)
-    healthBar.countText = healthBar.countTextFrame:CreateFontString(nil, "OVERLAY")
-    healthBar.countText:SetPoint("CENTER", healthBar.countTextFrame, "CENTER", 0, 0)
-  end
-  healthBar.countText:SetDrawLayer("OVERLAY", 7)
-  healthBar.countText:SetAlpha(1)
-  healthBar.countText:SetFont(SnapComboPointsDB.healthCountFont, SnapComboPointsDB.healthCountFontSize, SnapComboPointsDB.healthCountFontOutline)
-  local hcr, hcg, hcb, hca = unpack(SnapComboPointsDB.healthCountColor or {1, 1, 1, 1})
-  healthBar.countText:SetTextColor(hcr, hcg, hcb, hca or 1)
-  healthBar.countText:SetShadowColor(unpack(SnapComboPointsDB.healthCountShadowColor))
-  healthBar.countText:SetShadowOffset(SnapComboPointsDB.healthCountShadowOffset, -SnapComboPointsDB.healthCountShadowOffset)
 end
 
 -- Get the list of statusbar textures.
@@ -600,31 +551,18 @@ ApplyFrameSizeAndPosition = function()
   local width = tonumber(SnapComboPointsDB.width) or defaults.width
   local height = tonumber(SnapComboPointsDB.height) or defaults.height
   local energyHeight = tonumber(SnapComboPointsDB.energyHeight) or defaults.energyHeight
-  local energyYOffset = tonumber(SnapComboPointsDB.energyYOffset) or 0
-  local healthHeight = tonumber(SnapComboPointsDB.healthHeight) or defaults.healthHeight
-  local healthGap = tonumber(SnapComboPointsDB.healthGap) or defaults.healthGap
   if width < 1 then width = defaults.width end
   if height < 1 then height = defaults.height end
   if energyHeight < 1 then energyHeight = defaults.energyHeight end
-  if healthHeight < 1 then healthHeight = defaults.healthHeight end
   SnapComboPointsDB.width = width
   SnapComboPointsDB.height = height
   SnapComboPointsDB.energyHeight = energyHeight
-  SnapComboPointsDB.energyYOffset = energyYOffset
-  SnapComboPointsDB.healthHeight = healthHeight
-  SnapComboPointsDB.healthGap = healthGap
 
   f:SetSize(width, height)
   f:ClearAllPoints()
-  local anchorName = SnapComboPointsDB.anchorFrame
-  local anchorFrame = (anchorName and _G[anchorName]) or UIParent
-  if not anchorFrame then
-    anchorFrame = UIParent
-    SnapComboPointsDB.anchorFrame = "UIParent"
-  end
   f:SetPoint(
     SnapComboPointsDB.point,
-    anchorFrame,
+    UIParent,
     SnapComboPointsDB.relPoint,
     SnapComboPointsDB.x,
     SnapComboPointsDB.y
@@ -632,7 +570,9 @@ ApplyFrameSizeAndPosition = function()
 
   energyBorder:SetSize(width, energyHeight)
   energyBorder:ClearAllPoints()
-  energyBorder:SetPoint("TOPLEFT", f, "BOTTOMLEFT", 0, -SnapComboPointsDB.energyGap + energyYOffset)
+  local energyGap = tonumber(SnapComboPointsDB.energyGap) or 0
+  local energyYOffset = tonumber(SnapComboPointsDB.energyYOffset) or 0
+  energyBorder:SetPoint("TOPLEFT", f, "BOTTOMLEFT", 0, -(energyGap + energyYOffset))
 
   local inset = tonumber(SnapComboPointsDB.energyBorderSize) or 0
   energyBar:ClearAllPoints()
@@ -643,33 +583,8 @@ ApplyFrameSizeAndPosition = function()
     energyBar:SetAllPoints(energyBorder)
   end
 
-  healthBorder:SetSize(width, healthHeight)
-  healthBorder:ClearAllPoints()
-  healthBorder:SetPoint("TOPLEFT", energyBorder, "BOTTOMLEFT", 0, -healthGap)
-
-  local healthInset = tonumber(SnapComboPointsDB.healthBorderSize) or tonumber(SnapComboPointsDB.energyBorderSize) or 0
-  healthBar:ClearAllPoints()
-  if healthInset > 0 then
-    healthBar:SetPoint("TOPLEFT", healthBorder, "TOPLEFT", healthInset, -healthInset)
-    healthBar:SetPoint("BOTTOMRIGHT", healthBorder, "BOTTOMRIGHT", -healthInset, healthInset)
-  else
-    healthBar:SetAllPoints(healthBorder)
-  end
-
   -- Leave edit panel position alone (AceGUI handles its own placement)
 end
-
--- Set anchor frame by name.
-SetAnchorFrame = function(name)
-  SnapComboPointsDB.anchorFrame = (name and name ~= "") and name or "UIParent"
-  ApplyFrameSizeAndPosition()
-  UpdateComboDisplay()
-  UpdateEnergyDisplay()
-  if addon.UpdateHealthDisplay then
-    addon.UpdateHealthDisplay()
-  end
-end
-
 
 -- Create the edit mode panel if needed.
 CreateEditModePanel = function()
@@ -683,8 +598,6 @@ UpdateComboDisplay = function()
   if not ShouldShow() then
     f:Hide()
     energyBorder:Hide()
-    healthBorder:Hide()
-    healthBar:Hide()
     return
   end
 
@@ -715,13 +628,12 @@ UpdateComboDisplay = function()
   local cr, cg, cb, ca = unpack(SnapComboPointsDB.color)
   local xr, xg, xb, xa = unpack(SnapComboPointsDB.charged)
   local hr, hg, hb, ha = unpack(SnapComboPointsDB.highComboColor)
-  local threshold = addon.GetHighComboThreshold and addon.GetHighComboThreshold() or (SnapComboPointsDB.highComboPointsThreshold or 0)
-  local useHigh = (addon.IsHighComboEnabledForSpec and addon.IsHighComboEnabledForSpec() or SnapComboPointsDB.highComboEnabled) and current >= threshold
+  local threshold = SnapComboPointsDB.highComboPointsThreshold or 0
+  local useHigh = SnapComboPointsDB.highComboEnabled and current >= threshold
   local perPointEnabled = SnapComboPointsDB.perPointColorsEnabled
   local perPointColors = SnapComboPointsDB.perPointColors
 
   local er, eg, eb, ea = unpack(SnapComboPointsDB.emptyColor)
-  local _, _, _, ba = unpack(SnapComboPointsDB.pipBgColor or {0, 0, 0, 0})
 
   -- Snap updates: no smoothing, just 0/1 and show/hide
   for i = 1, maxPower do
@@ -750,7 +662,7 @@ UpdateComboDisplay = function()
         b.pip:Hide()
       else
         b.fill:SetValue(1)
-        b.fill:SetStatusBarColor(er, eg, eb, ba or ea or 1)
+        b.fill:SetStatusBarColor(er, eg, eb, ea or 1)
         b.pip:Show()
       end
     end
@@ -768,16 +680,32 @@ UpdateComboDisplay = function()
   f:Show()
 end
 
+local function FormatShortNumber(value)
+  if type(issecretvalue) == "function" and issecretvalue(value) then
+    return ""
+  end
+  value = tonumber(value) or 0
+  if value >= 1000000 then
+    local v = value / 1000000
+    local text = string.format("%.1fm", v)
+    text = text:gsub("%.0m", "m")
+    return text
+  elseif value >= 1000 then
+    local v = math.floor((value / 1000) + 0.5)
+    return string.format("%dk", v)
+  end
+  return tostring(value)
+end
+
+
 -- Update energy bar visibility and values.
 UpdateEnergyDisplay = function()
   if not ShouldShow() then
     energyBorder:Hide()
-    healthBorder:Hide()
-    healthBar:Hide()
     return
   end
 
-  if SnapComboPointsDB.showEnergyBar == false then
+  if SnapComboPointsDB.energyEnabled == false then
     energyBorder:Hide()
     energyBar:Hide()
     return
@@ -786,6 +714,7 @@ UpdateEnergyDisplay = function()
   local maxEnergy = UnitPowerMax("player", Enum.PowerType.Energy) or 0
   if maxEnergy <= 0 then
     energyBar:Hide()
+    energyBorder:Hide()
     return
   end
 
@@ -806,58 +735,10 @@ UpdateEnergyDisplay = function()
   energyBar:Show()
 end
 
--- Update health bar visibility and values.
-local function UpdateHealthDisplay()
-  if not ShouldShow() or not SnapComboPointsDB.showHealthBar then
-    healthBorder:Hide()
-    healthBar:Hide()
-    return
-  end
-
-  local maxHealth = UnitHealthMax("player") or 0
-  if maxHealth <= 0 then
-    healthBorder:Hide()
-    healthBar:Hide()
-    return
-  end
-
-  local health = UnitHealth("player") or 0
-  local safeMax = maxHealth or 0
-  healthBar:SetMinMaxValues(0, safeMax)
-  healthBar:SetValue(health)
-  local hr, hg, hb, ha = unpack(SnapComboPointsDB.healthColor or {0.2, 1.0, 0.2, 1})
-  healthBar:SetStatusBarColor(hr, hg, hb, ha or 1)
-  if healthBar.countText then
-    if SnapComboPointsDB.showHealthCount then
-      local textValue = nil
-      if securecallfunction then
-        textValue = securecallfunction(function()
-          local h = UnitHealth("player") or 0
-          if AbbreviateLargeNumbers then
-            return AbbreviateLargeNumbers(h)
-          end
-          return tostring(h)
-        end)
-      end
-      if not textValue then
-        textValue = "?"
-      end
-      healthBar.countText:SetText(textValue)
-      healthBar.countText:Show()
-    else
-      healthBar.countText:Hide()
-    end
-  end
-  healthBorder:Show()
-  healthBar:Show()
-end
-
 addon.UpdateComboDisplay = UpdateComboDisplay
 addon.UpdateEnergyDisplay = UpdateEnergyDisplay
-addon.UpdateHealthDisplay = UpdateHealthDisplay
 addon.ApplyFrameStyle = ApplyFrameStyle
 addon.ApplyFrameSizeAndPosition = ApplyFrameSizeAndPosition
-addon.SetAnchorFrame = SetAnchorFrame
 addon.LayoutBars = LayoutBars
 addon.InitLSM = InitLSM
 addon.GetLSM = function() return LSM end
@@ -887,14 +768,9 @@ local function SetUnlocked(state, suppressPrint)
     f:SetScript("OnDragStart", function(self) self:StartMoving() end)
     f:SetScript("OnDragStop", function(self)
       self:StopMovingOrSizing()
-      local point, relFrame, relPoint, x, y = self:GetPoint(1)
+      local point, _, relPoint, x, y = self:GetPoint(1)
       SnapComboPointsDB.point = point
       SnapComboPointsDB.relPoint = relPoint
-      if relFrame and relFrame.GetName and relFrame:GetName() then
-        SnapComboPointsDB.anchorFrame = relFrame:GetName()
-      else
-        SnapComboPointsDB.anchorFrame = "UIParent"
-      end
       SnapComboPointsDB.x = math.floor(x + 0.5)
       SnapComboPointsDB.y = math.floor(y + 0.5)
       if addon.editPanel and addon.editPanel:IsShown() then
@@ -959,7 +835,6 @@ local function SyncEditMode()
   end
   UpdateComboDisplay()
   UpdateEnergyDisplay()
-  UpdateHealthDisplay()
 end
 
 -- Hook edit mode show/hide events.
@@ -1009,6 +884,10 @@ local function HandleSlash(msg)
     SnapComboPointsDB.energyHeight = tonumber(a) or SnapComboPointsDB.energyHeight
     ApplyFrameSizeAndPosition()
     UpdateEnergyDisplay()
+  elseif cmd == "energygap" and a ~= "" then
+    SnapComboPointsDB.energyGap = tonumber(a) or SnapComboPointsDB.energyGap
+    ApplyFrameSizeAndPosition()
+    UpdateEnergyDisplay()
   elseif cmd == "texture" and a ~= "" then
     local tex = a
     SnapComboPointsDB.textureName = nil
@@ -1042,8 +921,6 @@ local function HandleSlash(msg)
     Print("showOnlyWhenRelevant =", SnapComboPointsDB.showOnlyWhenRelevant)
   elseif cmd == "panel" then
     ToggleDebugPanel()
-  elseif cmd == "specid" then
-    DebugSpecThreshold()
   end
 end
 
@@ -1068,15 +945,6 @@ f:SetScript("OnEvent", function(self, event, ...)
       SnapComboPointsDB = CopyDefaults(AwangsRogueResourceBarDB, defaults)
       AwangsRogueResourceBarDB = SnapComboPointsDB
 
-      -- Force combo point colors to white (user request)
-      SnapComboPointsDB.color = {1, 1, 1, 1}
-      SnapComboPointsDB.charged = {1, 1, 1, 1}
-      SnapComboPointsDB.hideContainer = true
-      SnapComboPointsDB.hideEmpty = false
-      if type(SnapComboPointsDB.pipBgColor) ~= "table" then
-        SnapComboPointsDB.pipBgColor = {0, 0, 0, 0.6}
-      end
-
       InitLSM()
 
       ApplyFrameStyle()
@@ -1088,8 +956,6 @@ f:SetScript("OnEvent", function(self, event, ...)
       self:RegisterUnitEvent("UNIT_POWER_UPDATE", "player")
       self:RegisterUnitEvent("UNIT_POWER_FREQUENT", "player")
       self:RegisterUnitEvent("UNIT_MAXPOWER", "player")
-      self:RegisterUnitEvent("UNIT_HEALTH", "player")
-      self:RegisterUnitEvent("UNIT_MAXHEALTH", "player")
       self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
       self:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
       if C_EditMode and C_EditMode.IsEditModeActive then
@@ -1101,7 +967,6 @@ f:SetScript("OnEvent", function(self, event, ...)
       SyncEditMode()
       UpdateComboDisplay()
       UpdateEnergyDisplay()
-      UpdateHealthDisplay()
       return
     end
 
@@ -1137,17 +1002,9 @@ f:SetScript("OnEvent", function(self, event, ...)
     return
   end
 
-  if event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" then
-    local unit = ...
-    if unit ~= "player" then return end
-    UpdateHealthDisplay()
-    return
-  end
-
   -- Anything else that could change max/visibility/layout
   UpdateComboDisplay()
   UpdateEnergyDisplay()
-  UpdateHealthDisplay()
 end)
 
 f:RegisterEvent("ADDON_LOADED")
