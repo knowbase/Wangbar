@@ -3,6 +3,7 @@ local _, addon = ...
 addon.defaults = {
   point = "CENTER",
   relPoint = "CENTER",
+  anchorFrame = "UIParent",
   x = 0,
   y = -140,
   width = 240,
@@ -10,6 +11,7 @@ addon.defaults = {
   spacing = 3,
   energyHeight = 8,
   energyGap = 4,
+  energyYOffset = 0,
   bg = {0, 0, 0, 0},
   border = {0, 0, 0, 0},
   bgTexture = "Interface\\Buttons\\WHITE8x8",
@@ -42,6 +44,24 @@ addon.defaults = {
   energyBg = {0, 0, 0, 0.15},
   energyBorder = {0, 0, 0, 0.9},
   energyBorderSize = 1,
+  showEnergyBar = true,
+
+  -- Optional health bar (below energy)
+  showHealthBar = false,
+  healthHeight = 8,
+  healthGap = 3,
+  healthColor = {0.2, 1.0, 0.2, 1},
+  healthBg = {0, 0, 0, 0.15},
+  healthBorder = {0, 0, 0, 0.9},
+  healthBorderSize = 1,
+  showHealthCount = false,
+  healthCountFont = "Fonts\\FRIZQT__.TTF",
+  healthCountFontName = nil,
+  healthCountFontSize = 12,
+  healthCountFontOutline = "OUTLINE",
+  healthCountColor = {1, 1, 1, 1},
+  healthCountShadowColor = {0, 0, 0, 1},
+  healthCountShadowOffset = 1,
 
   -- Borders (per pip)
   pipBorderSize = 1,
@@ -66,14 +86,26 @@ addon.defaults = {
   countShadowOffset = 1,
   showEnergyCount = true,
   energyCountFont = "Fonts\\FRIZQT__.TTF",
+  energyCountFontName = nil,
   energyCountFontSize = 12,
   energyCountFontOutline = "OUTLINE",
+  energyCountColor = {1, 1, 1, 1},
   energyCountShadowColor = {0, 0, 0, 1},
   energyCountShadowOffset = 1,
 
   -- Conditional combo colors
   highComboEnabled = true,
   highComboPointsThreshold = 5,
+  highComboEnabledSpecs = {
+    [259] = true, -- Assassination
+    [260] = true, -- Outlaw
+    [261] = true, -- Subtlety
+  },
+  highComboPointsThresholds = {
+    [259] = 5, -- Assassination
+    [260] = 5, -- Outlaw
+    [261] = 5, -- Subtlety
+  },
   highComboColor = {1, 0.4, 0.4, 1},
 
   -- Minimap button

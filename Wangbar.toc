@@ -8,6 +8,7 @@
 
 Config.lua
 Utils.lua
+Spec.lua
 Options.lua
 EditPanel.lua
 Core.lua
