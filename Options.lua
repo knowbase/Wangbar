@@ -18,7 +18,6 @@ local borderColorOptions = {
   { key = "Orange", value = {1, 0.5, 0.1, 1} },
   { key = "Yellow", value = {1, 0.85, 0.2, 1} },
 }
-
 local borderColorValues = {}
 for i = 1, #borderColorOptions do
   borderColorValues[borderColorOptions[i].key] = borderColorOptions[i].key
@@ -67,9 +66,6 @@ local function RefreshEnergy()
   end
   if addon.UpdateEnergyDisplay then
     addon.UpdateEnergyDisplay()
-  end
-  if addon.UpdateHealthDisplay then
-    addon.UpdateHealthDisplay()
   end
 end
 
@@ -148,27 +144,6 @@ local function SetEnergyFontByName(name)
   end
 end
 
-local function SetHealthFontByName(name)
-  local db = GetDB()
-  if not SnapComboPointsDB then return end
-  if addon.InitLSM then
-    addon.InitLSM()
-  end
-  local lsm = addon.GetLSM and addon.GetLSM() or nil
-  if lsm and lsm.Fetch and name ~= "Default" then
-    db.healthCountFont = lsm:Fetch("font", name)
-    db.healthCountFontName = name
-  else
-    db.healthCountFont = db.healthCountFont or "Fonts\\FRIZQT__.TTF"
-    db.healthCountFontName = "Default"
-  end
-  if addon.ApplyFrameStyle then
-    addon.ApplyFrameStyle()
-  end
-  if addon.UpdateHealthDisplay then
-    addon.UpdateHealthDisplay()
-  end
-end
 
 local function GetStatusbarValues()
   if addon.GetStatusbarList then
@@ -181,31 +156,6 @@ local function GetStatusbarValues()
   end
   return {}
 end
-
-local anchorPointValues = {
-  TOPLEFT = "TOPLEFT",
-  TOP = "TOP",
-  TOPRIGHT = "TOPRIGHT",
-  LEFT = "LEFT",
-  CENTER = "CENTER",
-  RIGHT = "RIGHT",
-  BOTTOMLEFT = "BOTTOMLEFT",
-  BOTTOM = "BOTTOM",
-  BOTTOMRIGHT = "BOTTOMRIGHT",
-}
-
-local commonAnchorFrames = {
-  UIParent = "UIParent",
-  PlayerFrame = "PlayerFrame",
-  TargetFrame = "TargetFrame",
-  FocusFrame = "FocusFrame",
-  PetFrame = "PetFrame",
-  CastingBarFrame = "CastingBarFrame",
-  UIErrorsFrame = "UIErrorsFrame",
-  ObjectiveTrackerFrame = "ObjectiveTrackerFrame",
-  Minimap = "Minimap",
-  ChatFrame1 = "ChatFrame1",
-}
 
 local function BuildPerPointArgs()
   local args = {}
@@ -243,12 +193,6 @@ local function BuildPerPointArgs()
   return args
 end
 
-local rogueSpecThresholds = {
-  { id = 259, name = "Assassination" },
-  { id = 260, name = "Outlaw" },
-  { id = 261, name = "Subtlety" },
-}
-
 local options = {
   type = "group",
   name = addon.ADDON_TITLE or "Wangbar",
@@ -266,7 +210,7 @@ local options = {
         },
         highComboEnabled = {
           type = "toggle",
-          name = "Enable threshold color (global)",
+          name = "Change color at combo point threshold",
           order = 2,
           get = function() return GetDB().highComboEnabled end,
           set = function(_, value)
@@ -280,7 +224,7 @@ local options = {
           name = "Combo point threshold",
           order = 3,
           min = 0,
-          max = 7,
+          max = 10,
           step = 1,
           get = function() return GetDB().highComboPointsThreshold or 0 end,
           set = function(_, value)
@@ -288,79 +232,6 @@ local options = {
             SnapComboPointsDB.highComboPointsThreshold = value
             RefreshCombo()
           end,
-        },
-        perSpecThresholds = {
-          type = "group",
-          name = "Rogue spec thresholds",
-          inline = true,
-          order = 3.5,
-          args = (function()
-            local args = {}
-            for i = 1, #rogueSpecThresholds do
-              local spec = rogueSpecThresholds[i]
-              args["specGroup" .. spec.id] = {
-                type = "group",
-                name = spec.name,
-                inline = true,
-                order = i,
-                args = {
-                  enabled = {
-                    type = "toggle",
-                    name = "Enable threshold color",
-                    order = 1,
-                    get = function()
-                      local db = GetDB()
-                      local enabled = db.highComboEnabledSpecs or {}
-                      local value = enabled[spec.id]
-                      if value == nil then
-                        value = enabled[tostring(spec.id)]
-                      end
-                      if value ~= nil then
-                        return value and true or false
-                      end
-                      return db.highComboEnabled and true or false
-                    end,
-                    set = function(_, value)
-                      if not SnapComboPointsDB then return end
-                      if type(SnapComboPointsDB.highComboEnabledSpecs) ~= "table" then
-                        SnapComboPointsDB.highComboEnabledSpecs = {}
-                      end
-                      SnapComboPointsDB.highComboEnabledSpecs[spec.id] = value and true or false
-                      SnapComboPointsDB.highComboEnabledSpecs[tostring(spec.id)] = nil
-                      RefreshCombo()
-                    end,
-                  },
-                  threshold = {
-                    type = "range",
-                    name = "Threshold",
-                    order = 2,
-                    min = 0,
-                    max = 7,
-                    step = 1,
-                    get = function()
-                      local db = GetDB()
-                      local thresholds = db.highComboPointsThresholds or {}
-                      local value = thresholds[spec.id]
-                      if value == nil then
-                        value = thresholds[tostring(spec.id)]
-                      end
-                      return value or db.highComboPointsThreshold or 0
-                    end,
-                    set = function(_, value)
-                      if not SnapComboPointsDB then return end
-                      if type(SnapComboPointsDB.highComboPointsThresholds) ~= "table" then
-                        SnapComboPointsDB.highComboPointsThresholds = {}
-                      end
-                      SnapComboPointsDB.highComboPointsThresholds[spec.id] = value
-                      SnapComboPointsDB.highComboPointsThresholds[tostring(spec.id)] = nil
-                      RefreshCombo()
-                    end,
-                  },
-                },
-              }
-            end
-            return args
-          end)(),
         },
         highComboColor = {
           type = "color",
@@ -422,21 +293,24 @@ local options = {
           name = "Energy Bar",
           order = 10,
         },
-        showEnergyBar = {
+        energyEnabled = {
           type = "toggle",
-          name = "Show energy bar",
-          order = 10.1,
-          get = function() return GetDB().showEnergyBar end,
+          name = "Enable energy bar",
+          order = 11,
+          get = function() return GetDB().energyEnabled ~= false end,
           set = function(_, value)
             if not SnapComboPointsDB then return end
-            SnapComboPointsDB.showEnergyBar = value and true or false
+            SnapComboPointsDB.energyEnabled = value and true or false
+            if addon.ApplyFrameSizeAndPosition then
+              addon.ApplyFrameSizeAndPosition()
+            end
             RefreshEnergy()
           end,
         },
         energyColor = {
           type = "color",
           name = "Energy bar color",
-          order = 11,
+          order = 12,
           hasAlpha = true,
           get = function()
             local r, g, b, a = unpack(GetDB().energyColor or {1, 1, 1, 1})
@@ -446,44 +320,6 @@ local options = {
             if not SnapComboPointsDB then return end
             SnapComboPointsDB.energyColor = { r, g, b, a or 1 }
             RefreshEnergy()
-          end,
-        },
-        healthHeader = {
-          type = "header",
-          name = "Health Bar",
-          order = 12,
-        },
-        showHealthBarColorTab = {
-          type = "toggle",
-          name = "Show health bar",
-          order = 12.1,
-          get = function() return GetDB().showHealthBar end,
-          set = function(_, value)
-            if not SnapComboPointsDB then return end
-            SnapComboPointsDB.showHealthBar = value and true or false
-            if addon.ApplyFrameSizeAndPosition then
-              addon.ApplyFrameSizeAndPosition()
-            end
-            if addon.UpdateHealthDisplay then
-              addon.UpdateHealthDisplay()
-            end
-          end,
-        },
-        healthColor = {
-          type = "color",
-          name = "Health bar color",
-          order = 13,
-          hasAlpha = true,
-          get = function()
-            local r, g, b, a = unpack(GetDB().healthColor or {0.2, 1.0, 0.2, 1})
-            return r, g, b, a or 1
-          end,
-          set = function(_, r, g, b, a)
-            if not SnapComboPointsDB then return end
-            SnapComboPointsDB.healthColor = { r, g, b, a or 1 }
-            if addon.UpdateHealthDisplay then
-              addon.UpdateHealthDisplay()
-            end
           end,
         },
         perPointHeader = {
@@ -559,10 +395,35 @@ local options = {
                 RefreshCombo()
               end,
             },
+            pipBgOpacity = {
+              type = "range",
+              name = "Combo point background opacity",
+              order = 3,
+              min = 0,
+              max = 1,
+              step = 0.05,
+              get = function()
+                local color = GetDB().pipBgColor or {0, 0, 0, 0}
+                return color[4] or 0
+              end,
+              set = function(_, value)
+                if not SnapComboPointsDB then return end
+                local color = SnapComboPointsDB.pipBgColor or {0, 0, 0, 0}
+                SnapComboPointsDB.pipBgColor = { color[1] or 0, color[2] or 0, color[3] or 0, value }
+                if type(SnapComboPointsDB.emptyColor) == "table" then
+                  local er, eg, eb = SnapComboPointsDB.emptyColor[1], SnapComboPointsDB.emptyColor[2], SnapComboPointsDB.emptyColor[3]
+                  SnapComboPointsDB.emptyColor = { er or 0, eg or 0, eb or 0, value }
+                end
+                RefreshCombo()
+                if addon.ApplyFrameStyle then
+                  addon.ApplyFrameStyle()
+                end
+              end,
+            },
             energyBorder = {
               type = "select",
               name = "Energy border color",
-              order = 3,
+              order = 4,
               values = borderColorValues,
               get = function()
                 return FindBorderColorName(GetDB().energyBorder)
@@ -576,7 +437,7 @@ local options = {
             energyBorderSize = {
               type = "range",
               name = "Energy border size",
-              order = 4,
+              order = 5,
               min = 0,
               max = 10,
               step = 1,
@@ -590,138 +451,13 @@ local options = {
                 end
               end,
             },
-            healthBorder = {
-              type = "select",
-              name = "Health border color",
-              order = 5,
-              values = borderColorValues,
-              get = function()
-                return FindBorderColorName(GetDB().healthBorder)
-              end,
-              set = function(_, value)
-                if not SnapComboPointsDB then return end
-                SnapComboPointsDB.healthBorder = GetBorderColorValue(value)
-                if addon.ApplyFrameStyle then
-                  addon.ApplyFrameStyle()
-                end
-                if addon.UpdateHealthDisplay then
-                  addon.UpdateHealthDisplay()
-                end
-              end,
-            },
-            healthBorderSize = {
-              type = "range",
-              name = "Health border size",
-              order = 6,
-              min = 0,
-              max = 10,
-              step = 1,
-              get = function() return GetDB().healthBorderSize or 0 end,
-              set = function(_, value)
-                if not SnapComboPointsDB then return end
-                SnapComboPointsDB.healthBorderSize = value
-                if addon.ApplyFrameSizeAndPosition then
-                  addon.ApplyFrameSizeAndPosition()
-                end
-                if addon.ApplyFrameStyle then
-                  addon.ApplyFrameStyle()
-                end
-                if addon.UpdateHealthDisplay then
-                  addon.UpdateHealthDisplay()
-                end
-              end,
-            },
-          },
-        },
-        backgrounds = {
-          type = "group",
-          name = "Backgrounds",
-          inline = true,
-          order = 2,
-          args = {
-            comboBgOpacity = {
-              type = "range",
-              name = "Combo background opacity",
-              order = 1,
-              min = 0,
-              max = 1,
-              step = 0.05,
-              get = function()
-                local bg = GetDB().pipBgColor or {0, 0, 0, 0}
-                return bg[4] or 0
-              end,
-              set = function(_, value)
-                if not SnapComboPointsDB then return end
-                if type(SnapComboPointsDB.pipBgColor) ~= "table" then
-                  SnapComboPointsDB.pipBgColor = {0, 0, 0, value}
-                else
-                  local r, g, b = unpack(SnapComboPointsDB.pipBgColor)
-                  SnapComboPointsDB.pipBgColor = {r or 0, g or 0, b or 0, value}
-                end
-                if addon.ApplyFrameStyle then
-                  addon.ApplyFrameStyle()
-                end
-                if addon.UpdateComboDisplay then
-                  addon.UpdateComboDisplay()
-                end
-              end,
-            },
-            energyBgOpacity = {
-              type = "range",
-              name = "Energy background opacity",
-              order = 2,
-              min = 0,
-              max = 1,
-              step = 0.05,
-              get = function()
-                local bg = GetDB().energyBg or {0, 0, 0, 0}
-                return bg[4] or 0
-              end,
-              set = function(_, value)
-                if not SnapComboPointsDB then return end
-                if type(SnapComboPointsDB.energyBg) ~= "table" then
-                  SnapComboPointsDB.energyBg = {0, 0, 0, value}
-                else
-                  local r, g, b = unpack(SnapComboPointsDB.energyBg)
-                  SnapComboPointsDB.energyBg = {r or 0, g or 0, b or 0, value}
-                end
-                RefreshEnergy()
-              end,
-            },
-            healthBgOpacity = {
-              type = "range",
-              name = "Health background opacity",
-              order = 3,
-              min = 0,
-              max = 1,
-              step = 0.05,
-              get = function()
-                local bg = GetDB().healthBg or {0, 0, 0, 0}
-                return bg[4] or 0
-              end,
-              set = function(_, value)
-                if not SnapComboPointsDB then return end
-                if type(SnapComboPointsDB.healthBg) ~= "table" then
-                  SnapComboPointsDB.healthBg = {0, 0, 0, value}
-                else
-                  local r, g, b = unpack(SnapComboPointsDB.healthBg)
-                  SnapComboPointsDB.healthBg = {r or 0, g or 0, b or 0, value}
-                end
-                if addon.ApplyFrameStyle then
-                  addon.ApplyFrameStyle()
-                end
-                if addon.UpdateHealthDisplay then
-                  addon.UpdateHealthDisplay()
-                end
-              end,
-            },
           },
         },
         textures = {
           type = "group",
           name = "Textures",
           inline = true,
-          order = 3,
+          order = 2,
           args = {
             comboTexture = {
               type = "select",
@@ -772,52 +508,10 @@ local options = {
           inline = true,
           order = 1,
           args = {
-            anchorPreset = {
-              type = "select",
-              name = "Anchor preset",
-              order = 0,
-              values = commonAnchorFrames,
-              get = function()
-                return GetDB().anchorFrame or "UIParent"
-              end,
-              set = function(_, value)
-                if addon.SetAnchorFrame then
-                  addon.SetAnchorFrame(value)
-                else
-                  if not SnapComboPointsDB then return end
-                  SnapComboPointsDB.anchorFrame = value
-                  RefreshAll()
-                end
-              end,
-            },
-            point = {
-              type = "select",
-              name = "Anchor point",
-              order = 1,
-              values = anchorPointValues,
-              get = function() return GetDB().point or "CENTER" end,
-              set = function(_, value)
-                if not SnapComboPointsDB then return end
-                SnapComboPointsDB.point = value
-                RefreshAll()
-              end,
-            },
-            relPoint = {
-              type = "select",
-              name = "Relative point",
-              order = 2,
-              values = anchorPointValues,
-              get = function() return GetDB().relPoint or "CENTER" end,
-              set = function(_, value)
-                if not SnapComboPointsDB then return end
-                SnapComboPointsDB.relPoint = value
-                RefreshAll()
-              end,
-            },
             x = {
               type = "range",
               name = "X",
-              order = 3,
+              order = 1,
               min = -1000,
               max = 1000,
               step = 1,
@@ -831,7 +525,7 @@ local options = {
             y = {
               type = "range",
               name = "Y",
-              order = 4,
+              order = 2,
               min = -1000,
               max = 1000,
               step = 1,
@@ -845,7 +539,7 @@ local options = {
             width = {
               type = "range",
               name = "Width",
-              order = 5,
+              order = 3,
               min = 1,
               max = 500,
               step = 1,
@@ -858,8 +552,8 @@ local options = {
             },
             height = {
               type = "range",
-              name = "Height",
-              order = 6,
+              name = "Energy Height",
+              order = 4,
               min = 1,
               max = 200,
               step = 1,
@@ -872,8 +566,8 @@ local options = {
             },
             spacing = {
               type = "range",
-              name = "Spacing",
-              order = 7,
+              name = "Combo Point Spacing",
+              order = 5,
               min = 0,
               max = 20,
               step = 1,
@@ -887,7 +581,7 @@ local options = {
             energyHeight = {
               type = "range",
               name = "Energy Height",
-              order = 8,
+              order = 6,
               min = 1,
               max = 200,
               step = 1,
@@ -901,9 +595,9 @@ local options = {
             energyYOffset = {
               type = "range",
               name = "Energy Y Offset",
-              order = 9,
-              min = -200,
-              max = 200,
+              order = 7,
+              min = -100,
+              max = 100,
               step = 1,
               get = function() return GetDB().energyYOffset or 0 end,
               set = function(_, value)
@@ -914,47 +608,11 @@ local options = {
             },
           },
         },
-        health = {
-          type = "group",
-          name = "Health Bar",
-          inline = true,
-          order = 3,
-          args = {
-            healthHeight = {
-              type = "range",
-              name = "Health Height",
-              order = 1,
-              min = 1,
-              max = 200,
-              step = 1,
-              get = function() return GetDB().healthHeight or 8 end,
-              set = function(_, value)
-                if not SnapComboPointsDB then return end
-                SnapComboPointsDB.healthHeight = value
-                RefreshAll()
-              end,
-            },
-            healthGap = {
-              type = "range",
-              name = "Health Gap",
-              order = 2,
-              min = 0,
-              max = 50,
-              step = 1,
-              get = function() return GetDB().healthGap or 3 end,
-              set = function(_, value)
-                if not SnapComboPointsDB then return end
-                SnapComboPointsDB.healthGap = value
-                RefreshAll()
-              end,
-            },
-          },
-        },
         text = {
           type = "group",
           name = "Combo Point Text",
           inline = true,
-          order = 4,
+          order = 2,
           args = {
             showCount = {
               type = "toggle",
@@ -1024,7 +682,7 @@ local options = {
           type = "group",
           name = "Energy Text",
           inline = true,
-          order = 5,
+          order = 3,
           args = {
             showEnergyCount = {
               type = "toggle",
@@ -1085,76 +743,6 @@ local options = {
                 end
                 if addon.UpdateEnergyDisplay then
                   addon.UpdateEnergyDisplay()
-                end
-              end,
-            },
-          },
-        },
-        healthText = {
-          type = "group",
-          name = "Health Text",
-          inline = true,
-          order = 6,
-          args = {
-            showHealthCount = {
-              type = "toggle",
-              name = "Enable health count",
-              order = 1,
-              get = function() return GetDB().showHealthCount end,
-              set = function(_, value)
-                if not SnapComboPointsDB then return end
-                SnapComboPointsDB.showHealthCount = value and true or false
-                if addon.UpdateHealthDisplay then
-                  addon.UpdateHealthDisplay()
-                end
-              end,
-            },
-            healthCountFontName = {
-              type = "select",
-              name = "Font",
-              order = 2,
-              values = GetFontList,
-              get = function() return GetDB().healthCountFontName or "Default" end,
-              set = function(_, value)
-                SetHealthFontByName(value)
-              end,
-            },
-            healthCountFontSize = {
-              type = "range",
-              name = "Size",
-              order = 3,
-              min = 6,
-              max = 72,
-              step = 1,
-              get = function() return GetDB().healthCountFontSize or 12 end,
-              set = function(_, value)
-                if not SnapComboPointsDB then return end
-                SnapComboPointsDB.healthCountFontSize = value
-                if addon.ApplyFrameStyle then
-                  addon.ApplyFrameStyle()
-                end
-                if addon.UpdateHealthDisplay then
-                  addon.UpdateHealthDisplay()
-                end
-              end,
-            },
-            healthCountColor = {
-              type = "color",
-              name = "Text color",
-              order = 4,
-              hasAlpha = true,
-              get = function()
-                local r, g, b, a = unpack(GetDB().healthCountColor or {1, 1, 1, 1})
-                return r, g, b, a or 1
-              end,
-              set = function(_, r, g, b, a)
-                if not SnapComboPointsDB then return end
-                SnapComboPointsDB.healthCountColor = { r, g, b, a or 1 }
-                if addon.ApplyFrameStyle then
-                  addon.ApplyFrameStyle()
-                end
-                if addon.UpdateHealthDisplay then
-                  addon.UpdateHealthDisplay()
                 end
               end,
             },

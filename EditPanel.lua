@@ -231,7 +231,6 @@ local function CreateEditModePanel()
 
   MakeNumberRow(layoutGroup, "Spacing", 0, 20, 1, function() return SnapComboPointsDB.spacing or 3 end, function(v) SnapComboPointsDB.spacing = v end, true, math.rad(90))
   MakeNumberRow(layoutGroup, "Energy Height", 1, 200, 1, function() return SnapComboPointsDB.energyHeight or 8 end, function(v) SnapComboPointsDB.energyHeight = v end, true, math.rad(0))
-  MakeNumberRow(layoutGroup, "Energy Y Offset", -200, 200, 1, function() return SnapComboPointsDB.energyYOffset or 0 end, function(v) SnapComboPointsDB.energyYOffset = v end, false, math.rad(0))
 
 
   local texGroup = AceGUI:Create("InlineGroup")
