@@ -1,0 +1,43 @@
+name: Build Addon Package
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [closed]
+    branches: [ main ]
+
+jobs:
+  package:
+    if: ${{ github.event.pull_request.merged == true }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y subversion git zip
+
+      - name: Fetch to Libs/
+        run: |
+          mkdir -p Libs
+          svn checkout https://repos.wowace.com/wow/libstub/trunk Libs/LibStub
+          svn checkout https://repos.wowace.com/wow/callbackhandler/trunk/CallbackHandler-1.0 Libs/CallbackHandler-1.0
+          svn checkout https://repos.wowace.com/wow/ace3/trunk/AceGUI-3.0 Libs/AceGUI-3.0
+          svn checkout https://repos.wowace.com/wow/ace3/trunk/AceConfig-3.0 Libs/AceConfig-3.0
+          svn checkout https://repos.wowace.com/wow/libsharedmedia-3-0/trunk/LibSharedMedia-3.0 Libs/LibSharedMedia-3.0
+          svn checkout https://repos.wowace.com/wow/libdbicon-1-0/trunk/LibDBIcon-1.0 Libs/LibDBIcon-1.0
+          git clone --depth=1 https://github.com/tekkub/libdatabroker-1-1.git Libs/LibDataBroker-1.1
+
+      - name: Remove VCS metadata
+        run: |
+          find Libs -type d -name .svn -prune -exec rm -rf {} +
+          find Libs -type d -name .git -prune -exec rm -rf {} +
+
+      - name: Create zip for CurseForge
+        run: zip -r Wangbar.zip . -x '*.git*' '*.svn*' '.github/*' '.pkgmeta'
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: Wangbar-package
+          path: Wangbar.zip
