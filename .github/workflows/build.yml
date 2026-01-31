@@ -15,7 +15,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install tools
-        run: sudo apt-get update && sudo apt-get install -y subversion git zip
+        run: sudo apt-get update && sudo apt-get install -y subversion git zip rsync
 
       - name: Fetch to Libs/
         run: |
@@ -33,11 +33,14 @@ jobs:
           find Libs -type d -name .svn -prune -exec rm -rf {} +
           find Libs -type d -name .git -prune -exec rm -rf {} +
 
-      - name: Create zip for CurseForge
-        run: zip -r Wangbar.zip . -x '*.git*' '*.svn*' '.github/*' '.pkgmeta'
+      - name: Prepare package directory
+        run: |
+          rm -rf package
+          mkdir -p package
+          rsync -a --exclude='.git' --exclude='.svn' --exclude='.github' --exclude='.pkgmeta' ./ package/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Wangbar-package
-          path: Wangbar.zip
+          name: Wangbar
+          path: package
