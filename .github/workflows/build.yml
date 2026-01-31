@@ -37,7 +37,7 @@ jobs:
         run: zip -r Wangbar.zip . -x '*.git*' '*.svn*' '.github/*' '.pkgmeta'
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Wangbar-package
           path: Wangbar.zip
