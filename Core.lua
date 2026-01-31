@@ -337,11 +337,13 @@ local function LayoutBars(maxPower)
   for i = 1, maxPower do
     -- Outer frame = border + background
     local pip = CreateFrame("Frame", nil, f, "BackdropTemplate")
-    pip:SetBackdrop({
-      bgFile = "Interface\\Buttons\\WHITE8x8",
-      edgeFile = "Interface\\Buttons\\WHITE8x8",
-      edgeSize = SnapComboPointsDB.pipBorderSize,
-    })
+    local pipBackdrop = { bgFile = "Interface\\Buttons\\WHITE8x8" }
+    local pipEdgeSize = tonumber(SnapComboPointsDB.pipBorderSize) or 0
+    if pipEdgeSize > 0 then
+      pipBackdrop.edgeFile = "Interface\\Buttons\\WHITE8x8"
+      pipBackdrop.edgeSize = pipEdgeSize
+    end
+    pip:SetBackdrop(pipBackdrop)
     pip:SetBackdropColor(unpack(SnapComboPointsDB.pipBgColor))
     pip:SetBackdropBorderColor(unpack(SnapComboPointsDB.pipBorderColor))
     pip:SetHeight(height)
@@ -438,11 +440,13 @@ ApplyFrameStyle = function()
     end
   end
 
-  energyBorder:SetBackdrop({
-    bgFile = "Interface\\Buttons\\WHITE8x8",
-    edgeFile = "Interface\\Buttons\\WHITE8x8",
-    edgeSize = SnapComboPointsDB.energyBorderSize or 1,
-  })
+  local energyBackdrop = { bgFile = "Interface\\Buttons\\WHITE8x8" }
+  local energyEdgeSize = tonumber(SnapComboPointsDB.energyBorderSize) or 0
+  if energyEdgeSize > 0 then
+    energyBackdrop.edgeFile = "Interface\\Buttons\\WHITE8x8"
+    energyBackdrop.edgeSize = energyEdgeSize
+  end
+  energyBorder:SetBackdrop(energyBackdrop)
   energyBorder:SetBackdropColor(unpack(SnapComboPointsDB.energyBg or SnapComboPointsDB.pipBgColor))
   energyBorder:SetBackdropBorderColor(unpack(SnapComboPointsDB.energyBorder))
   energyBar:SetStatusBarTexture(SnapComboPointsDB.energyTexture)

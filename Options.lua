@@ -453,6 +453,27 @@ local options = {
                 end
               end,
             },
+            energyBgOpacity = {
+              type = "range",
+              name = "Energy background opacity",
+              order = 6,
+              min = 0,
+              max = 1,
+              step = 0.05,
+              get = function()
+                local color = GetDB().energyBg or {0,0,0,0}
+                return color[4] or 0
+              end,
+              set = function(_, value)
+                if not SnapComboPointsDB then return end
+                local color = SnapComboPointsDB.energyBg or {0,0,0,0}
+                SnapComboPointsDB.energyBg = { color[1] or 0, color[2] or 0, color[3] or 0, value }
+                if addon.ApplyFrameStyle then
+                  addon.ApplyFrameStyle()
+                end
+                RefreshEnergy()
+              end,
+            },
           },
         },
         textures = {
