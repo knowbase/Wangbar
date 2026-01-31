@@ -1,7 +1,25 @@
 package-as: Wangbar
 
+externals:
+  libs/LibStub:
+    url: https://repos.wowace.com/wow/libstub/trunk
+  libs/CallbackHandler-1.0:
+    url: https://repos.wowace.com/wow/callbackhandler/trunk/CallbackHandler-1.0
+  libs/Ace3/AceGUI-3.0:
+    url: https://repos.wowace.com/wow/ace3/trunk/AceGUI-3.0
+  libs/Ace3/AceConfig-3.0:
+    url: https://repos.wowace.com/wow/ace3/trunk/AceConfig-3.0
+  libs/Ace3/AceConfigDialog-3.0:
+    url: https://repos.wowace.com/wow/ace3/trunk/AceConfigDialog-3.0
+  libs/LibSharedMedia-3.0:
+    url: https://repos.wowace.com/wow/libsharedmedia-3-0/trunk/LibSharedMedia-3-0
+  libs/LibDataBroker:
+    url: https://github.com/tekkub/libdatabroker-1-1
+  libs/LibDBIcon:
+    url: https://repos.wowace.com/wow/libdbicon-1-0/trunk/LibDBIcon-1-0
+
 ignore:
 
-- .github/\*\*
+- .github/**
 - README.md
 - CONTRIBUTING.md

@@ -1,0 +1,38 @@
+name: Vendor externals
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  vendor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y subversion git
+          python3 -m pip install --upgrade pip
+          pip3 install pyyaml
+
+      - name: Run vendor script
+        run: python3 .github/scripts/vendor_externals.py
+
+      - name: Commit vendored libs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add libs || true
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Vendor externals via .pkgmeta [skip ci]"
+            git push
+          fi
