@@ -36,7 +36,7 @@ jobs:
       - name: Prepare package directory
         run: |
           rm -rf package
-          mkdir -p package
+          mkdir -p package/package
           rsync -a --exclude='.git' --exclude='.svn' --exclude='.github' --exclude='.pkgmeta' ./ package/
 
       - name: Upload artifact
