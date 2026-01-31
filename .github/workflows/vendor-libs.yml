@@ -1,5 +1,8 @@
 name: Vendor externals
 
+permissions:
+  contents: write
+
 on:
   push:
     branches: [ main ]
@@ -7,6 +10,7 @@ on:
 
 jobs:
   vendor:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
