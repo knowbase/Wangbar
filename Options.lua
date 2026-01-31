@@ -4,6 +4,8 @@ local AceConfig = LibStub("AceConfig-3.0", true)
 local AceConfigDialog = LibStub("AceConfigDialog-3.0", true)
 
 if not AceConfig or not AceConfigDialog then
+  local title = (addon and (addon.ADDON_TITLE or "Wangbar")) or "Wangbar"
+  print(title .. ": Ace libraries not found; options menu unavailable. go download ace3 from curseforge.com :)")
   return
 end
 
@@ -552,7 +554,7 @@ local options = {
             },
             height = {
               type = "range",
-              name = "Energy Height",
+              name = "Combo Point Height",
               order = 4,
               min = 1,
               max = 200,
