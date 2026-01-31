@@ -35,12 +35,14 @@ jobs:
 
       - name: Prepare package directory
         run: |
-          rm -rf package
+          rm -rf package package_out
           mkdir -p package/Wangbar
           rsync -a --exclude='.git' --exclude='.svn' --exclude='.github' --exclude='.pkgmeta' --exclude='*.md' ./ package/Wangbar/
+          mkdir -p package_out
+          mv package/Wangbar package_out/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: Wangbar
-          path: package/Wangbar
+          path: package_out
