@@ -2,7 +2,7 @@
 ## Title: Wangbar
 ## Notes: Primary and secondary resource bars
 ## Author: Awang
-## Version: 1.0.1
+## Version: 1.0.2
 ## SavedVariables: AwangsRogueResourceBarDB
 ## PackageMeta: .pkgmeta
 
