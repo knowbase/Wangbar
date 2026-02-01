@@ -37,6 +37,37 @@ local autosizeWatcher = nil
 local autosizeAccum = 0
 local anchorFollower = nil
 local anchorAccum = 0
+local cdmSizeTarget = nil
+
+local function DetachCDMSizeListener()
+  if not cdmSizeTarget then return end
+  if type(cdmSizeTarget.SetScript) == "function" then
+    pcall(function() cdmSizeTarget:SetScript("OnSizeChanged", nil) end)
+  end
+  cdmSizeTarget = nil
+end
+
+local function AttachCDMSizeListener()
+  local fr = GetCDMFrame()
+  if not fr then return end
+  if fr == cdmSizeTarget then return end
+  -- detach previous
+  DetachCDMSizeListener()
+  -- try to attach OnSizeChanged handler to react immediately to size changes
+  if type(fr.SetScript) == "function" then
+    local ok, err = pcall(function()
+      fr:SetScript("OnSizeChanged", function()
+        local w = GetCDMWidth()
+        if w and w > 0 then
+          ApplyWidthFromCDM(w)
+        end
+      end)
+    end)
+    if ok then
+      cdmSizeTarget = fr
+    end
+  end
+end
 
 local function GetCDMWidth()
   if type(SnapComboPointsDB) ~= "table" then return nil end
@@ -304,6 +335,8 @@ local function StartAutoSizeWatcher()
       ApplyWidthFromCDM(w)
     end
   end)
+  -- also try to attach a size-change listener for immediate updates
+  pcall(AttachCDMSizeListener)
 end
 
 local function StopAutoSizeWatcher()
@@ -312,6 +345,7 @@ local function StopAutoSizeWatcher()
   autosizeWatcher:Hide()
   autosizeWatcher = nil
   autosizeAccum = 0
+  DetachCDMSizeListener()
 end
 
 local function StartAnchorFollower()
