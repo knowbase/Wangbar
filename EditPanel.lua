@@ -59,6 +59,19 @@ local function CreateEditModePanel()
   end)
 
   btnGroup:AddChild(optionsBtn)
+  
+  local matchCdmBtn = AceGUI:Create("Button")
+  matchCdmBtn:SetText("Match CDM Width")
+  matchCdmBtn:SetWidth(140)
+  matchCdmBtn:SetCallback("OnClick", function()
+    if addon.ForceApplyCDMWidth then
+      addon.ForceApplyCDMWidth()
+      if addon.ApplyFrameStyle then addon.ApplyFrameStyle() end
+      if addon.UpdateComboDisplay then addon.UpdateComboDisplay() end
+      if addon.UpdateEnergyDisplay then addon.UpdateEnergyDisplay() end
+    end
+  end)
+  btnGroup:AddChild(matchCdmBtn)
   scroll:AddChild(btnGroup)
 
   local function Clamp(value, minValue, maxValue, step)

@@ -200,11 +200,54 @@ local options = {
   name = addon.ADDON_TITLE or "Wangbar",
   childGroups = "tab",
   args = {
+    welcome = {
+      type = "group",
+      name = "Welcome",
+      order = 0,
+      args = {
+        header = {
+          type = "header",
+          name = "Welcome to Wangbar",
+          order = 0,
+        },
+        intro1 = {
+          type = "description",
+          name = "Wangbar is for the people.(Except this addon is made mostly for me, I will not implement all requests, especially if I myself would never use it.)\n\nWANGBAR WANGBAR WANGBAR WANGBAR WANGBAR WANGBAR WANGBAR WANGBAR WANGBAR! \n\nWangbar provides a compact combo-point bar with optional autosizing and anchoring to external cooldown managers.\n\nFeatures:\n- combo points can can change based on current combo point count (turns X color at Y combo point count) \n- coloring of combo points individually \n- Auto-size to external cooldown managers (EssentialCooldownViewer, ArcUI etc.)\n- Anchor to cooldown manager and follow its movement\n- User-adjustable X/Y offsets while anchored \n- Energy bar with configurable gap and offset \n- Match CDM width from Edit Panel",
+          order = 1,
+          width = "full",
+        },
+        recommend = {
+          type = "header",
+          name = "STRONGLY recommend anchoring this bar to your CDM — easiest to maintain!",
+          order = 2,
+        },
+        gotoAutosize = {
+          type = "execute",
+          name = "Open Auto-size Settings",
+          order = 3,
+          width = "full",
+          func = function()
+            if addon and addon.EnsureOptionsPanel then
+              addon.EnsureOptionsPanel()
+            end
+            AceConfigDialog:Open("Wangbar")
+            AceConfigDialog:SelectGroup("Wangbar", "layoutText", "layout")
+          end,
+        },
+        intro2 = {
+          type = "description",
+          name = "\n\nUse the tabs to customize appearance, behavior, and layout.\nFor quick adjustments, open the Edit Panel and use the 'Match CDM Width' button.\nTake some time to learn what this addon can do and what you can customize!\n\nEnjoy! Reach out on discord @awang with questions",
+          order = 4,
+          width = "full",
+        },
+      },
+    },
     bars = {
       type = "group",
       name = "Coloring",
       order = 1,
       args = {
+        
         comboHeader = {
           type = "header",
           name = "Combo Points",
@@ -357,6 +400,30 @@ local options = {
           inline = true,
           order = 22,
           args = BuildPerPointArgs(),
+        },
+        spacer_after_points = {
+          type = "description",
+          name = "\n",
+          order = 995,
+        },
+        edit_mode_button = {
+          type = "execute",
+          name = "Open Edit Mode",
+          order = 996,
+          func = function()
+            if addon and addon.ToggleDebugPanel then
+              addon.ToggleDebugPanel()
+            elseif addon and addon.ShowEditPanel then
+              addon.ShowEditPanel()
+            else
+              print(((addon and (addon.ADDON_TITLE or "Wangbar")) or "Wangbar") .. ": Edit mode unavailable.")
+            end
+          end,
+        },
+        commands_help = {
+          type = "description",
+          name = "Slash commands: /wang, /wangbar, /wb\nUse any of the above in chat to open the options menu.",
+          order = 999,
         },
       },
     },
@@ -627,6 +694,87 @@ local options = {
                 if not SnapComboPointsDB then return end
                 SnapComboPointsDB.energyYOffset = value
                 RefreshAll()
+              end,
+            },
+            autosizeHeader = {
+              type = "header",
+              name = "Auto-size",
+              order = 8,
+            },
+            autoSizeToCDM = {
+              type = "toggle",
+              name = "Auto-size to Cooldown Manager",
+              order = 9,
+              get = function() return GetDB().autoSizeToCDM end,
+              set = function(_, value)
+                if not SnapComboPointsDB then return end
+                SnapComboPointsDB.autoSizeToCDM = value and true or false
+                if addon.ApplyFrameSizeAndPosition then
+                  addon.ApplyFrameSizeAndPosition()
+                end
+              end,
+            },
+            anchorToCDM = {
+              type = "toggle",
+              name = "Anchor to Cooldown Manager",
+              desc = "Anchor the bar to the detected cooldown manager so moving it also moves the bar.",
+              order = 11,
+              get = function() return GetDB().anchorToCDM end,
+              set = function(_, value)
+                if not SnapComboPointsDB then return end
+                SnapComboPointsDB.anchorToCDM = value and true or false
+                if value and not SnapComboPointsDB._anchorInitialized then
+                  SnapComboPointsDB.x = 0
+                  SnapComboPointsDB.y = 0
+                  SnapComboPointsDB._anchorInitialized = true
+                end
+                if addon.ApplyFrameSizeAndPosition then
+                  addon.ApplyFrameSizeAndPosition()
+                end
+              end,
+            },
+            autoDetectCDM = {
+              type = "toggle",
+              name = "Auto-detect cooldown frame",
+              desc = "Try to automatically find the cooldown manager frame (recommended).",
+              order = 10,
+              get = function() return GetDB().autoDetectCDM end,
+              set = function(_, value)
+                if not SnapComboPointsDB then return end
+                SnapComboPointsDB.autoDetectCDM = value and true or false
+                if addon.ApplyFrameSizeAndPosition then
+                  addon.ApplyFrameSizeAndPosition()
+                end
+              end,
+            },
+            autoSizeUseArcUI = {
+              type = "toggle",
+              name = "ArcUI compatibility",
+              desc = "If you use ArcUI, enable this to prefer ArcUI cooldown frames.",
+              order = 11,
+              get = function() return GetDB().autoSizeUseArcUI end,
+              set = function(_, value)
+                if not SnapComboPointsDB then return end
+                SnapComboPointsDB.autoSizeUseArcUI = value and true or false
+                if addon.ApplyFrameSizeAndPosition then
+                  addon.ApplyFrameSizeAndPosition()
+                end
+              end,
+            },
+            autoSizeInterval = {
+              type = "range",
+              name = "Poll interval (s)",
+              order = 12,
+              min = 0.05,
+              max = 2,
+              step = 0.05,
+              get = function() return tonumber(GetDB().autoSizeInterval) or 0.25 end,
+              set = function(_, value)
+                if not SnapComboPointsDB then return end
+                SnapComboPointsDB.autoSizeInterval = tonumber(value) or 0.25
+                if addon.ApplyFrameSizeAndPosition then
+                  addon.ApplyFrameSizeAndPosition()
+                end
               end,
             },
           },

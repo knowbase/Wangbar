@@ -17,6 +17,7 @@ addon.frames = {
 local defaults = addon.defaults
 
 local bars = {}
+local lastAppliedWidth = nil
 local unlocked = false
 local editModeActive = false
 local editModeHooked = false
@@ -30,6 +31,320 @@ local ToggleDebugPanel
 local CreateEditModePanel
 local UpdateEditPanelFields
 local ApplyFrameSizeAndPosition
+
+-- Autosize watcher for external cooldown manager (e.g. EssentialCooldownViewer)
+local autosizeWatcher = nil
+local autosizeAccum = 0
+local anchorFollower = nil
+local anchorAccum = 0
+
+local function GetCDMWidth()
+  if type(SnapComboPointsDB) ~= "table" then return nil end
+  local function findFirstExisting(names)
+    for i = 1, #names do
+      local n = names[i]
+      if n and type(n) == "string" and n ~= "" then
+        local obj = _G and _G[n]
+        if obj and obj.GetWidth and type(obj.GetWidth) == "function" then
+          return n, obj
+        end
+      end
+    end
+    return nil, nil
+  end
+
+  -- Candidate names: user-provided, standard, then ArcUI variations
+  local userName = SnapComboPointsDB.autoSizeCDMName
+  local standard = "EssentialCooldownViewer"
+  local arcCandidates = {
+    "ArcUI_CooldownManager",
+    "Arc_CooldownManager",
+    "ArcCooldowns",
+    "ArcUI_EssentialCooldownViewer",
+    "ArcUI_EssentialContainer",
+    "ArcCDM",
+    "ArcCooldownFrame",
+    "ArcUICooldownFrame",
+  }
+
+  -- If user explicitly asked to use ArcUI, check those first
+  if SnapComboPointsDB.autoSizeUseArcUI then
+    local name, obj = findFirstExisting(arcCandidates)
+    if name and obj then
+      local ok, w = pcall(obj.GetWidth, obj)
+      if ok and type(w) == "number" and w > 0 then
+        -- cache discovered name
+        SnapComboPointsDB.autoSizeCDMName = name
+        return w
+      end
+    end
+    -- fallback to configured or standard
+  end
+
+  -- If auto-detect is enabled, search all candidates (user + standard + arc list)
+  if SnapComboPointsDB.autoDetectCDM then
+    local candidates = {}
+    if userName and userName ~= "" then table.insert(candidates, userName) end
+    table.insert(candidates, standard)
+    for i = 1, #arcCandidates do table.insert(candidates, arcCandidates[i]) end
+    local name, obj = findFirstExisting(candidates)
+    if name and obj then
+      -- If the detected object looks like a single icon, try to prefer a container/parent
+      local function findContainerCandidate(o)
+        if not o then return o end
+        -- prefer frames with multiple children (safe calls)
+        if type(o.GetNumChildren) == "function" then
+          local ok, n = pcall(o.GetNumChildren, o)
+          if ok and type(n) == "number" and n > 1 then
+            return o
+          end
+        end
+        -- climb up a few levels looking for a parent container
+        local current = o
+        for i = 1, 4 do
+          if type(current.GetParent) == "function" then
+            current = current:GetParent()
+            if not current then break end
+            if type(current.GetNumChildren) == "function" then
+              local okc, nc = pcall(current.GetNumChildren, current)
+              if okc and type(nc) == "number" and nc > 1 then
+                return current
+              end
+            end
+            -- also prefer a parent with a larger width
+            if type(current.GetWidth) == "function" and type(o.GetWidth) == "function" then
+              local okc, wc = pcall(current.GetWidth, current)
+              local oko, wo = pcall(o.GetWidth, o)
+              if okc and oko and type(wc) == "number" and type(wo) == "number" and wc > wo then
+                return current
+              end
+            end
+          else
+            break
+          end
+        end
+        return o
+      end
+
+      local candidate = findContainerCandidate(obj) or obj
+      -- cache the discovered (or container) name when possible
+      if candidate and candidate.GetName and candidate:GetName() then
+        SnapComboPointsDB.autoSizeCDMName = candidate:GetName()
+      else
+        SnapComboPointsDB.autoSizeCDMName = name
+      end
+      local ok, w = pcall(function() return candidate:GetWidth() end)
+      if ok and type(w) == "number" and w > 0 then
+        return w
+      end
+    end
+  else
+    -- auto-detect disabled: use user-configured name then standard
+    local candidates = { userName, standard }
+    local name, obj = findFirstExisting(candidates)
+    if name and obj then
+      local ok, w = pcall(function() return obj:GetWidth() end)
+      if ok and type(w) == "number" and w > 0 then
+        return w
+      end
+    end
+  end
+
+  return nil
+end
+
+-- Return the frame object for the cooldown manager (or nil)
+local function GetCDMFrame()
+  if type(SnapComboPointsDB) ~= "table" then return nil end
+  -- Prefer cached name when available
+  local name = SnapComboPointsDB.autoSizeCDMName
+  if name and name ~= "" then
+    local fobj = _G and _G[name]
+    if fobj and type(fobj.GetWidth) == "function" then
+      return fobj
+    end
+  end
+  -- Fallback to detection via GetCDMWidth logic: reuse candidate search
+  -- Candidate lists from GetCDMWidth
+  local candidates = {}
+  if SnapComboPointsDB.autoDetectCDM then
+    if SnapComboPointsDB.autoSizeCDMName and SnapComboPointsDB.autoSizeCDMName ~= "" then table.insert(candidates, SnapComboPointsDB.autoSizeCDMName) end
+    table.insert(candidates, "EssentialCooldownViewer")
+    local arcCandidates = { "ArcUI_CooldownManager", "Arc_CooldownManager", "ArcCooldowns", "ArcUI_EssentialCooldownViewer", "ArcUI_EssentialContainer", "ArcCDM", "ArcCooldownFrame", "ArcUICooldownFrame" }
+    for i = 1, #arcCandidates do table.insert(candidates, arcCandidates[i]) end
+  else
+    table.insert(candidates, SnapComboPointsDB.autoSizeCDMName)
+    table.insert(candidates, "EssentialCooldownViewer")
+  end
+  for i = 1, #candidates do
+    local n = candidates[i]
+    if n and type(n) == "string" and n ~= "" then
+      local obj = _G and _G[n]
+      if obj and type(obj.GetWidth) == "function" then
+        -- try to prefer container parents
+        local function preferContainer(o)
+          if not o then return o end
+          if type(o.GetNumChildren) == "function" then
+            local ok, nc = pcall(o.GetNumChildren, o)
+            if ok and type(nc) == "number" and nc > 1 then return o end
+          end
+          if type(o.GetParent) == "function" then
+            local cur = o:GetParent()
+            if cur and type(cur.GetNumChildren) == "function" then
+              local ok2, nc2 = pcall(cur.GetNumChildren, cur)
+              if ok2 and type(nc2) == "number" and nc2 > 1 then return cur end
+            end
+          end
+          return o
+        end
+        local chosen = preferContainer(obj)
+        if chosen then
+          if chosen.GetName and chosen:GetName() then
+            SnapComboPointsDB.autoSizeCDMName = chosen:GetName()
+          end
+          return chosen
+        end
+      end
+    end
+  end
+  return nil
+end
+
+local function AnchorToCDM()
+  if not SnapComboPointsDB or not SnapComboPointsDB.anchorToCDM then return false end
+  local cdm = GetCDMFrame()
+  if not cdm then return false end
+
+  -- Try to read absolute coordinates (left/right/top) from the CDM safely.
+  local left, right, top
+  local ok1, l = pcall(function() return cdm:GetLeft() end)
+  local ok2, r = pcall(function() return cdm:GetRight() end)
+  local ok3, t = pcall(function() return cdm:GetTop() end)
+  if ok1 and type(l) == "number" then left = l end
+  if ok2 and type(r) == "number" then right = r end
+  if ok3 and type(t) == "number" then top = t end
+
+  if not left or not right or not top then
+    -- Fallback: anchor directly to the CDM (best-effort, may fail on some layouts)
+    f:ClearAllPoints()
+    local userX = tonumber(SnapComboPointsDB.x) or 0
+    local userY = tonumber(SnapComboPointsDB.y) or 0
+    f:SetPoint("TOPLEFT", cdm, "TOPLEFT", userX, userY)
+    local energyGap = tonumber(SnapComboPointsDB.energyGap) or 0
+    local energyYOffset = tonumber(SnapComboPointsDB.energyYOffset) or 0
+    energyBorder:ClearAllPoints()
+    energyBorder:SetPoint("TOPLEFT", f, "BOTTOMLEFT", 0, -(energyGap + energyYOffset))
+    f:EnableMouse(false)
+    f:SetMovable(false)
+    return true
+  end
+
+  local energyYOffset = tonumber(SnapComboPointsDB.energyYOffset) or 0
+  local energyHeight = tonumber(SnapComboPointsDB.energyHeight) or (defaults and defaults.energyHeight) or 8
+
+  -- Compute bottom Y coordinate for the energy border so its bottom aligns to CDM's top + offset
+  local energyGap = tonumber(SnapComboPointsDB.energyGap) or 0
+  local bottomY = top + energyYOffset
+  local topY = bottomY + energyHeight
+
+  -- Place the combo frame directly above where the energy border should be
+  local userX = tonumber(SnapComboPointsDB.x) or 0
+  local userY = tonumber(SnapComboPointsDB.y) or 0
+  f:ClearAllPoints()
+  f:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", left + userX, topY + userY)
+
+  -- Anchor energyBorder to `f` so `energyGap` and `energyYOffset` behave as before
+  energyBorder:ClearAllPoints()
+  energyBorder:SetPoint("TOPLEFT", f, "BOTTOMLEFT", 0, -(energyGap + energyYOffset))
+
+  f:EnableMouse(false)
+  f:SetMovable(false)
+  return true
+end
+
+local function ApplyWidthFromCDM(width)
+  if not width then return end
+  width = math.floor(width + 0.5)
+  if width < 1 then return end
+  if lastAppliedWidth == width then return end
+  SnapComboPointsDB.width = width
+  f:SetWidth(width)
+  energyBorder:SetWidth(width)
+  lastAppliedWidth = width
+  local comboPowerType = nil
+  if addon.GetComboPowerType then
+    comboPowerType = addon.GetComboPowerType()
+  elseif GetComboPowerType then
+    comboPowerType = GetComboPowerType()
+  end
+  local maxPower = 0
+  if comboPowerType then
+    maxPower = UnitPowerMax("player", comboPowerType) or 0
+  end
+  if maxPower > 0 then
+    if addon.LayoutBars then
+      addon.LayoutBars(maxPower)
+    elseif LayoutBars then
+      LayoutBars(maxPower)
+    end
+  end
+end
+
+local function StartAutoSizeWatcher()
+  if autosizeWatcher then return end
+  autosizeWatcher = CreateFrame("Frame")
+  autosizeAccum = 0
+  autosizeWatcher:SetScript("OnUpdate", function(self, elapsed)
+    autosizeAccum = autosizeAccum + (elapsed or 0)
+    local interval = tonumber(SnapComboPointsDB.autoSizeInterval) or 0.25
+    if autosizeAccum < interval then return end
+    autosizeAccum = 0
+    local w = GetCDMWidth()
+    if w then
+      ApplyWidthFromCDM(w)
+    end
+  end)
+end
+
+local function StopAutoSizeWatcher()
+  if not autosizeWatcher then return end
+  autosizeWatcher:SetScript("OnUpdate", nil)
+  autosizeWatcher:Hide()
+  autosizeWatcher = nil
+  autosizeAccum = 0
+end
+
+local function StartAnchorFollower()
+  if anchorFollower then return end
+  anchorFollower = CreateFrame("Frame")
+  anchorAccum = 0
+  anchorFollower:SetScript("OnUpdate", function(self, elapsed)
+    anchorAccum = anchorAccum + (elapsed or 0)
+    local interval = tonumber(SnapComboPointsDB.autoSizeInterval) or 0.25
+    if anchorAccum < interval then return end
+    anchorAccum = 0
+    if SnapComboPointsDB and SnapComboPointsDB.anchorToCDM then
+      AnchorToCDM()
+    end
+  end)
+end
+
+local function StopAnchorFollower()
+  if not anchorFollower then return end
+  anchorFollower:SetScript("OnUpdate", nil)
+  anchorFollower:Hide()
+  anchorFollower = nil
+  anchorAccum = 0
+end
+
+-- Public helper to force one-time width sync from detected CDM
+addon.ForceApplyCDMWidth = function()
+  if type(GetCDMWidth) ~= "function" or type(ApplyWidthFromCDM) ~= "function" then return end
+  local w = GetCDMWidth()
+  if w and w > 0 then
+    ApplyWidthFromCDM(w)
+  end
+end
 
 -- Silence chat output.
 local function Print()
@@ -219,6 +534,10 @@ local function ShowEditPanel()
   end
 end
 
+-- Export functions so other modules (options) can open the edit panel.
+addon.ShowEditPanel = ShowEditPanel
+addon.ToggleDebugPanel = ToggleDebugPanel
+
 local function EnsureEditButton()
   if editButton then return end
   editButton = CreateFrame("Button", "WangbarEditButton", f, "UIPanelButtonTemplate")
@@ -274,6 +593,7 @@ local CopyDefaults = addon.CopyDefaults
 local IsRogue = addon.IsRogue
 local IsWindwalker = addon.IsWindwalker
 local IsFeral = addon.IsFeral
+local IsEnhancement = addon.IsEnhancement
 
 -- Check if the player uses Chi power.
 local function UsesChi()
@@ -302,7 +622,7 @@ end
 local function ShouldShow()
   if editModeActive then return true end
   if not SnapComboPointsDB.showOnlyWhenRelevant then return true end
-  return IsRogue() or UsesChi() or (IsWindwalker and IsWindwalker()) or (IsFeral and IsFeral())
+  return IsRogue() or UsesChi() or (IsWindwalker and IsWindwalker()) or (IsFeral and IsFeral()) or (IsEnhancement and IsEnhancement())
 end
 
 UpdateEditPanelFields = function()
@@ -554,6 +874,13 @@ ApplyFrameSizeAndPosition = function()
   addon.InitMinimapButton = InitMinimapButton
   local width = tonumber(SnapComboPointsDB.width) or defaults.width
   local height = tonumber(SnapComboPointsDB.height) or defaults.height
+  -- If anchoring is enabled and we haven't initialized it for this profile yet,
+  -- clear saved x/y so the bar appears on the CDM after reload. Do this only once.
+  if SnapComboPointsDB.anchorToCDM and not SnapComboPointsDB._anchorInitialized then
+    SnapComboPointsDB.x = 0
+    SnapComboPointsDB.y = 0
+    SnapComboPointsDB._anchorInitialized = true
+  end
   local energyHeight = tonumber(SnapComboPointsDB.energyHeight) or defaults.energyHeight
   if width < 1 then width = defaults.width end
   if height < 1 then height = defaults.height end
@@ -564,13 +891,28 @@ ApplyFrameSizeAndPosition = function()
 
   f:SetSize(width, height)
   f:ClearAllPoints()
-  f:SetPoint(
-    SnapComboPointsDB.point,
-    UIParent,
-    SnapComboPointsDB.relPoint,
-    SnapComboPointsDB.x,
-    SnapComboPointsDB.y
-  )
+  -- If anchoring to CDM is enabled, AnchorToCDM will set points; otherwise use saved position
+  if not SnapComboPointsDB.anchorToCDM then
+    f:SetPoint(
+      SnapComboPointsDB.point,
+      UIParent,
+      SnapComboPointsDB.relPoint,
+      SnapComboPointsDB.x,
+      SnapComboPointsDB.y
+    )
+  else
+    -- try anchoring; if it fails, fall back to saved position
+    local ok = AnchorToCDM()
+    if not ok then
+      f:SetPoint(
+        SnapComboPointsDB.point,
+        UIParent,
+        SnapComboPointsDB.relPoint,
+        SnapComboPointsDB.x,
+        SnapComboPointsDB.y
+      )
+    end
+  end
 
   energyBorder:SetSize(width, energyHeight)
   energyBorder:ClearAllPoints()
@@ -588,6 +930,29 @@ ApplyFrameSizeAndPosition = function()
   end
 
   -- Leave edit panel position alone (AceGUI handles its own placement)
+  -- If the saved width changed, force a relayout of combo pips so they match the new size.
+  -- Start/stop autosize watcher if configured
+  if SnapComboPointsDB.autoSizeToCDM then
+    StartAutoSizeWatcher()
+    local w = GetCDMWidth()
+    if w then
+      ApplyWidthFromCDM(w)
+    end
+  else
+    StopAutoSizeWatcher()
+  end
+  -- Start/stop anchor follower if configured
+  if SnapComboPointsDB.anchorToCDM then
+    StartAnchorFollower()
+  else
+    StopAnchorFollower()
+  end
+  local comboPowerType = GetComboPowerType()
+  local maxPower = UnitPowerMax("player", comboPowerType) or 0
+  if lastAppliedWidth ~= width and maxPower > 0 then
+    lastAppliedWidth = width
+    LayoutBars(maxPower)
+  end
 end
 
 -- Create the edit mode panel if needed.
@@ -715,14 +1080,19 @@ UpdateEnergyDisplay = function()
     return
   end
 
-  local maxEnergy = UnitPowerMax("player", Enum.PowerType.Energy) or 0
+  local powerType = Enum.PowerType.Energy
+  if IsEnhancement and IsEnhancement() and Enum.PowerType and Enum.PowerType.Maelstrom then
+    powerType = Enum.PowerType.Maelstrom
+  end
+
+  local maxEnergy = UnitPowerMax("player", powerType) or 0
   if maxEnergy <= 0 then
     energyBar:Hide()
     energyBorder:Hide()
     return
   end
 
-  local energy = UnitPower("player", Enum.PowerType.Energy, true) or 0
+  local energy = UnitPower("player", powerType, true) or 0
   energyBar:SetMinMaxValues(0, maxEnergy)
   energyBar:SetValue(energy)
   local er, eg, eb, ea = unpack(SnapComboPointsDB.energyColor)
@@ -850,90 +1220,12 @@ local function HookEditModeManager()
   editModeHooked = true
 end
 
-SLASH_AWANGSROGUERESOURCEBAR1 = "/arrb"
-SLASH_AWANGSROGUERESOURCEBAR2 = "/cp"
-SLASH_AWANGSROGUERESOURCEBAR3 = "/wb"
-SLASH_AWANGSROGUERESOURCEBARPANEL1 = "/arrbpanel"
-SLASH_AWANGSROGUERESOURCEBARPANEL2 = "/cppanel"
-
--- Handle slash command input.
-local function HandleSlash(msg)
-  msg = (msg or ""):lower()
-  local cmd, a, b = msg:match("^(%S+)%s*(%S*)%s*(%S*)$")
-
-  if cmd == "" then
-    OpenOptionsPanel()
-    return
-  end
-
-  if cmd == "unlock" then
-    SetUnlocked(true)
-  elseif cmd == "lock" then
-    SetUnlocked(false)
-  elseif cmd == "width" and a ~= "" then
-    SnapComboPointsDB.width = tonumber(a) or SnapComboPointsDB.width
-    ApplyFrameSizeAndPosition()
-    local comboPowerType = GetComboPowerType()
-    LayoutBars(UnitPowerMax("player", comboPowerType) or 0)
-    UpdateComboDisplay()
-    UpdateEnergyDisplay()
-  elseif cmd == "height" and a ~= "" then
-    SnapComboPointsDB.height = tonumber(a) or SnapComboPointsDB.height
-    ApplyFrameSizeAndPosition()
-    local comboPowerType = GetComboPowerType()
-    LayoutBars(UnitPowerMax("player", comboPowerType) or 0)
-    UpdateComboDisplay()
-    UpdateEnergyDisplay()
-  elseif cmd == "energyheight" and a ~= "" then
-    SnapComboPointsDB.energyHeight = tonumber(a) or SnapComboPointsDB.energyHeight
-    ApplyFrameSizeAndPosition()
-    UpdateEnergyDisplay()
-  elseif cmd == "energygap" and a ~= "" then
-    SnapComboPointsDB.energyGap = tonumber(a) or SnapComboPointsDB.energyGap
-    ApplyFrameSizeAndPosition()
-    UpdateEnergyDisplay()
-  elseif cmd == "texture" and a ~= "" then
-    local tex = a
-    SnapComboPointsDB.textureName = nil
-    SnapComboPointsDB.texture = tex
-    for i = 1, #bars do
-      if bars[i] and bars[i].fill then
-        bars[i].fill:SetStatusBarTexture(tex)
-      end
-    end
-    UpdateComboDisplay()
-  elseif cmd == "energytexture" and a ~= "" then
-    local tex = a
-    SnapComboPointsDB.energyTextureName = nil
-    SnapComboPointsDB.energyTexture = tex
-    energyBar:SetStatusBarTexture(tex)
-    UpdateEnergyDisplay()
-  elseif cmd == "x" and a ~= "" then
-    SnapComboPointsDB.x = tonumber(a) or SnapComboPointsDB.x
-    ApplyFrameSizeAndPosition()
-  elseif cmd == "y" and a ~= "" then
-    SnapComboPointsDB.y = tonumber(a) or SnapComboPointsDB.y
-    ApplyFrameSizeAndPosition()
-  elseif (cmd == "pos" or cmd == "setpos") and a ~= "" and b ~= "" then
-    SnapComboPointsDB.x = tonumber(a) or SnapComboPointsDB.x
-    SnapComboPointsDB.y = tonumber(b) or SnapComboPointsDB.y
-    ApplyFrameSizeAndPosition()
-  elseif cmd == "toggle" then
-    SnapComboPointsDB.showOnlyWhenRelevant = not SnapComboPointsDB.showOnlyWhenRelevant
-    UpdateComboDisplay()
-    UpdateEnergyDisplay()
-    Print("showOnlyWhenRelevant =", SnapComboPointsDB.showOnlyWhenRelevant)
-  elseif cmd == "panel" then
-    ToggleDebugPanel()
-  end
-end
-
-SlashCmdList.AWANGSROGUERESOURCEBAR = HandleSlash
-
-SlashCmdList.AWANGSROGUERESOURCEBARPANEL = ToggleDebugPanel
-
-SLASH_WANGBAR1 = "/wb"
-SlashCmdList.WANGBAR = function()
+-- Register only the minimal slash command interface.
+-- Remove all other console commands; only `/wang`, `/wangbar`, and `/wb` open the options.
+SLASH_WANG1 = "/wang"
+SLASH_WANG2 = "/wangbar"
+SLASH_WANG3 = "/wb"
+SlashCmdList.WANG = function()
   OpenOptionsPanel()
 end
 

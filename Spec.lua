@@ -1,100 +1,55 @@
+
 local _, addon = ...
 
-local defaults = addon.defaults
+-- Cache of the current specialization ID for quick access elsewhere in the addon.
+addon._currentSpecId = nil
 
-local function GetActiveSpecId()
-  local spec = GetSpecialization and GetSpecialization() or nil
-  local specId
-  if spec then
-    local _, _, _, _, _, _, id = GetSpecializationInfo(spec)
-    specId = id and id > 0 and id or nil
-  end
-  if not specId and spec then
-    local classId = select(3, UnitClass("player"))
-    if classId then
-      local _, _, _, _, _, _, id = GetSpecializationInfoForClassID(classId, spec)
-      specId = id and id > 0 and id or nil
-    end
-  end
-  if not specId and C_ClassTalents and C_ClassTalents.GetActiveConfigID and C_ClassTalents.GetSpecInfoForConfig then
-    local configId = C_ClassTalents.GetActiveConfigID()
-    local info = configId and C_ClassTalents.GetSpecInfoForConfig(configId) or nil
-    local id = info and info.specID or nil
-    specId = id and id > 0 and id or specId
-  end
-  if not specId and spec then
-    local classId = select(3, UnitClass("player"))
-    if classId == 8 then
-      if spec == 1 then
-        specId = 259
-      elseif spec == 2 then
-        specId = 260
-      elseif spec == 3 then
-        specId = 261
-      end
-    end
-  end
-  if not specId and spec then
-    local name = select(2, GetSpecializationInfo(spec))
-    if name == "Assassination" then
-      specId = 259
-    elseif name == "Outlaw" then
-      specId = 260
-    elseif name == "Subtlety" then
-      specId = 261
-    end
-  end
-  return specId
+local function UpdateCurrentSpecId()
+	local specId = nil
+	-- Prefer the ClassTalents API when available (more reliable)
+	if C_ClassTalents and C_ClassTalents.GetActiveConfigID and C_ClassTalents.GetSpecInfoForConfig then
+		local cfg = C_ClassTalents.GetActiveConfigID()
+		local info = cfg and C_ClassTalents.GetSpecInfoForConfig(cfg) or nil
+		if info and type(info.specID) == "number" and info.specID > 0 then
+			specId = info.specID
+		end
+	end
+
+	-- Fallback: use the legacy GetSpecialization API
+	if not specId and GetSpecialization and GetSpecializationInfo then
+		local spec = GetSpecialization()
+		if spec then
+			local ok, id = pcall(function() return select(7, GetSpecializationInfo(spec)) end)
+			if ok and type(id) == "number" and id > 0 then
+				specId = id
+			end
+		end
+	end
+
+	addon._currentSpecId = specId
+	return specId
 end
 
-local function GetHighComboThreshold()
-  local specId = GetActiveSpecId()
-  local thresholds = SnapComboPointsDB.highComboPointsThresholds
-  if specId and type(thresholds) == "table" then
-    local value = thresholds[specId]
-    if value == nil then
-      value = thresholds[tostring(specId)]
-    end
-    if value ~= nil then
-      return value
-    end
-  end
-  if specId and type(defaults.highComboPointsThresholds) == "table" then
-    local value = defaults.highComboPointsThresholds[specId]
-    if value == nil then
-      value = defaults.highComboPointsThresholds[tostring(specId)]
-    end
-    if value ~= nil then
-      return value
-    end
-  end
-  return SnapComboPointsDB.highComboPointsThreshold or 0
+-- Expose a simple getter for other modules
+addon.GetActiveSpecId = function()
+	return addon._currentSpecId or UpdateCurrentSpecId()
 end
 
-local function IsHighComboEnabledForSpec()
-  local specId = GetActiveSpecId()
-  local enabledSpecs = SnapComboPointsDB.highComboEnabledSpecs
-  if specId and type(enabledSpecs) == "table" then
-    local value = enabledSpecs[specId]
-    if value == nil then
-      value = enabledSpecs[tostring(specId)]
-    end
-    if value ~= nil then
-      return value and true or false
-    end
-  end
-  if specId and type(defaults.highComboEnabledSpecs) == "table" then
-    local value = defaults.highComboEnabledSpecs[specId]
-    if value == nil then
-      value = defaults.highComboEnabledSpecs[tostring(specId)]
-    end
-    if value ~= nil then
-      return value and true or false
-    end
-  end
-  return SnapComboPointsDB.highComboEnabled
+addon.GetHighComboThreshold = function()
+	return SnapComboPointsDB and SnapComboPointsDB.highComboPointsThreshold or 0
 end
 
-addon.GetActiveSpecId = GetActiveSpecId
-addon.GetHighComboThreshold = GetHighComboThreshold
-addon.IsHighComboEnabledForSpec = IsHighComboEnabledForSpec
+addon.IsHighComboEnabledForSpec = function()
+	return SnapComboPointsDB and SnapComboPointsDB.highComboEnabled
+end
+
+-- Keep the cached value up-to-date
+local specFrame = CreateFrame("Frame")
+specFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+specFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+specFrame:SetScript("OnEvent", function()
+	UpdateCurrentSpecId()
+end)
+
+-- Initialize immediately if possible
+UpdateCurrentSpecId()
