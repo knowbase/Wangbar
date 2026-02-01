@@ -36,3 +36,15 @@ function addon.IsFeral()
   local _, _, _, _, _, _, specId = GetSpecializationInfo(spec)
   return specId == 103
 end
+
+-- Check if the player is an Enhancement Shaman.
+function addon.IsEnhancement()
+  if select(2, UnitClass("player")) ~= "SHAMAN" then return false end
+  local spec = GetSpecialization()
+  if not spec then return false end
+  local _, _, _, _, _, _, specId = GetSpecializationInfo(spec)
+  if specId == 263 then return true end
+  -- Fallback to name check (less robust across locales)
+  local name = select(2, GetSpecializationInfo(spec))
+  return name == "Enhancement"
+end

@@ -80,6 +80,14 @@ addon.defaults = {
   highComboPointsThreshold = 5,
   highComboColor = {1, 0.4, 0.4, 1},
 
+  -- Auto-size to an external cooldown manager frame
+    autoSizeToCDM = true,
+  autoSizeCDMName = "EssentialCooldownViewer",
+  autoDetectCDM = true,
+  autoSizeUseArcUI = false,
+    anchorToCDM = false,
+  autoSizeInterval = 0.25,
+
   -- Minimap button
   minimap = {
     hide = false,

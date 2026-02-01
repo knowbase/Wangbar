@@ -4,6 +4,7 @@
 ## Author: Awang
 ## Version: 1.0.2
 ## SavedVariables: AwangsRogueResourceBarDB
+## SavedVariablesPerCharacter: AwangsRogueResourceBarDB
 ## PackageMeta: .pkgmeta
 
 # Required Libraries 
@@ -23,3 +24,4 @@ Utils.lua
 Options.lua
 EditPanel.lua
 Core.lua
+Spec.lua
